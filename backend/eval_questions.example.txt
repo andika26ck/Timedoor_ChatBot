@@ -1,0 +1,10 @@
+# Contoh file pertanyaan untuk mode batch:  python -m app.eval --file eval_questions.example.txt
+# - Satu pertanyaan per baris. Baris diawali '#' diabaikan.
+# - Kolom opsional dipisah TAB:  pertanyaan<TAB>domain<TAB>topik
+
+Bagaimana alur lengkap mendaftarkan siswa baru sampai jadwalnya terbentuk?
+Apa yang harus dilakukan teacher setelah selesai mengajar satu sesi?
+Kenapa jadwal kelas yang sudah dibuat tidak muncul atau berubah?
+Apa beda akun Free Trial dengan Free Access old system?
+Bagaimana cara generate schedule untuk sebuah kelas?
+Apa aturan hubungan Package dengan Session saat membuat order?

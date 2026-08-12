@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/*
+ * Timedoor brand surfaces
+ * Primary green dipakai di aksen/CTA. Background netral putih / ash
+ * supaya secondary colors tidak overuse (aturan brand: secondary <= 30%).
+ */
+body {
+  margin: 0;
+  background-color: #ffffff; /* Pure White */
+  color: #353535; /* Jet */
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+/* Dark mode: turunan brand-950 + Jet, bukan slate biru generik. */
+html.dark body {
+  background-color: #05170a; /* night-950 */
+  color: #f5f5f5; /* Ash */
+}
+
+/*
+ * Widget embed dirender di Shadow DOM, jadi <html class="dark"> TIDAK bisa
+ * menjangkau isinya. ThemeProvider menempelkan class `dark` langsung ke
+ * container ber-atribut [data-theme-root] di dalam shadow root.
+ */
+[data-theme-root] {
+  color-scheme: light;
+}
+[data-theme-root].dark {
+  color-scheme: dark;
+  color: #f5f5f5;
+}
+
+/* Scrollbar halus dengan tint brand. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 175, 19, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 175, 19, 0.35);
+  border-radius: 9999px;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(26, 205, 29, 0.3);
+}
+
+/* Sedikit rapikan spacing markdown jawaban AI. */
+.td-md > :first-child {
+  margin-top: 0;
+}
+.td-md > :last-child {
+  margin-bottom: 0;
+}
+
+/* Bold inti jawaban dari AI: sedikit ditegaskan warnanya. */
+.td-md strong {
+  font-weight: 600;
+  color: #108513; /* brand-700 */
+}
+.dark .td-md strong {
+  color: #43e545; /* brand-400 */
+}

@@ -1,0 +1,42 @@
+# Monorepo FAQ Bot - Postgres (pgvector) + Backend FastAPI
+# Frontend dijalankan terpisah (lihat frontend/README.md) atau via `npm run dev`.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: faqbot-postgres
+    environment:
+      POSTGRES_USER: faqbot
+      POSTGRES_PASSWORD: faqbot
+      POSTGRES_DB: faqbot
+    ports:
+      - "5433:5432"          # host 5433 -> container 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faqbot -d faqbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: faqbot-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash}"
+      RAG_EMBED_MODEL: "${RAG_EMBED_MODEL:-gemini-embedding-001}"
+      RAG_EMBED_DIM: "${RAG_EMBED_DIM:-768}"
+      RAG_STORE_BACKEND: "postgres"
+      # Antar-container: pakai nama service `db` dan port internal 5432 (bukan 5433).
+      RAG_PG_DSN: "postgresql://faqbot:faqbot@db:5432/faqbot"
+      RAG_PG_TABLE: "faq_kb"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173}"
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+google-genai
+pydantic-settings
+python-dotenv
+python-multipart
+pypdf
+python-docx
+numpy
+psycopg[binary]
+pgvector

@@ -1,0 +1,29 @@
+# ===== Python (backend) =====
+__pycache__/
+*.pyc
+.venv/
+venv/
+backend/.env
+backend/index_cache/
+
+# ===== Node (frontend) =====
+node_modules/
+frontend/dist/
+frontend/.env.local
+
+# ===== Secrets =====
+# .env root (dipakai docker compose untuk substitusi variabel).
+# Jangan commit kalau berisi API key.
+/.env
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# runtime / lokal
+.venv/
+venv/
+.vscode/
+backend/hasil.csv
+**/hasil.csv
+backend/app_settings.json

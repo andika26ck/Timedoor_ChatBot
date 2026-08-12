@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Style khusus LIBRARY floating chat.
+ * Tidak menyentuh html/body/#root milik website user.
+ * Preflight dimatikan lewat tailwind.lib.config.js.
+ */
+
+/* Scrollbar halus dengan tint brand, hanya di dalam widget. */
+[data-td-chat] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 175, 19, 0.35) transparent;
+}
+[data-td-chat] *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+[data-td-chat] *::-webkit-scrollbar-thumb {
+  background-color: rgba(16, 175, 19, 0.35);
+  border-radius: 9999px;
+}
+.dark [data-td-chat] *::-webkit-scrollbar-thumb {
+  background-color: rgba(26, 205, 29, 0.3);
+}
+
+/* Rapikan spacing markdown jawaban AI. */
+.td-md > :first-child {
+  margin-top: 0;
+}
+.td-md > :last-child {
+  margin-bottom: 0;
+}
+
+/* Inti jawaban di-bold — warna brand, beda light & dark. */
+.td-md strong {
+  color: #108513;
+  font-weight: 700;
+}
+.dark .td-md strong,
+[data-theme-root].dark .td-md strong {
+  color: #43e545;
+}

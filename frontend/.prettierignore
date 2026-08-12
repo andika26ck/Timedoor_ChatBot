@@ -1,0 +1,10 @@
+# Build outputs & deps (jangan diformat)
+node_modules
+dist
+dist-widget
+build
+coverage
+
+# Aset & file yang di-generate
+public
+*.min.js

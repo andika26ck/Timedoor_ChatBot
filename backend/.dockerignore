@@ -1,0 +1,9 @@
+.venv
+__pycache__/
+*.pyc
+.git
+.gitignore
+index_cache/
+*.zip
+.env
+README.md

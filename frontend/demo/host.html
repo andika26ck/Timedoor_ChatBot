@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo Website Host — Timedoor Chatbot Widget</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      .hero {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 80px 24px;
+      }
+      h1 { font-size: 2rem; }
+      p { line-height: 1.7; color: #475569; }
+      .card {
+        margin-top: 24px;
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+      }
+      code { background: #f1f5f9; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="hero">
+      <h1>Contoh Website Pihak Ketiga</h1>
+      <p>
+        Halaman ini <strong>bukan</strong> bagian dari aplikasi chatbot. Ini
+        mensimulasikan website lain yang menempelkan widget hanya dengan satu
+        tag <code>&lt;script&gt;</code>. Klik tombol bulat di kanan bawah untuk
+        mencoba.
+      </p>
+      <div class="card">
+        <strong>Cara pasang:</strong>
+        <pre><code>&lt;div id="td-chatbot"&gt;&lt;/div&gt;
+&lt;script
+  src="/widget.js"
+  data-td-chatbot
+  data-api-url="http://localhost:8000"
+  data-title="Timedoor Assistant"&gt;&lt;/script&gt;</code></pre>
+      </div>
+    </div>
+
+    <!-- Titik pasang widget + loader. -->
+    <div id="td-chatbot"></div>
+    <!--
+      Setelah menjalankan `npm run build:widget`, salin dist-widget/widget.js
+      ke sebelah file ini (atau sesuaikan src di bawah) lalu buka via server
+      statis, mis: `npx serve demo` atau `python -m http.server`.
+    -->
+    <script
+      src="../dist-widget/widget.js"
+      data-td-chatbot
+      data-api-url="http://localhost:8000"
+      data-title="Cobee"
+      data-subtitle="Ask Cobee Anything!"
+    ></script>
+  </body>
+</html>
