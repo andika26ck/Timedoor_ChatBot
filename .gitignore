@@ -27,3 +27,5 @@ venv/
 backend/hasil.csv
 **/hasil.csv
 backend/app_settings.json
+
+backend/data/
