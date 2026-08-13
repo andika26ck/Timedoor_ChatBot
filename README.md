@@ -111,3 +111,4 @@ RAG_EMBED_DIM=768
   `GEMINI_API_KEY`, dan `CORS_ORIGINS` (tambahkan domain frontend). Jalankan
   `python -m engine.build_index` sekali setelah DB siap.
 - **Frontend** -> Vercel: set `VITE_API_URL` ke URL backend produksi.
+"# Timedoor_ChatBot" 
