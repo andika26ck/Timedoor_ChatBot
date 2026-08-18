@@ -54,7 +54,7 @@ function fmtDate(iso?: string): string {
   return d.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function badgeClass(kind: "category" | "domain" | "topic"): string {
+function badgeClass(kind: "category" | "domain" | "topic" | "source"): string {
   if (kind === "category")
     return (
       "bg-brand-50 text-brand-700 border-brand-200 " +
@@ -64,6 +64,11 @@ function badgeClass(kind: "category" | "domain" | "topic"): string {
     return (
       "bg-ocean-50 text-navy border-ocean-100 " +
       "dark:bg-navy-600/25 dark:text-ocean dark:border-navy-600"
+    );
+  if (kind === "source")
+    return (
+      "bg-amber-50 text-amber-700 border-amber-200 " +
+      "dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700"
     );
   return (
     "bg-jet-100 text-jet-700 border-slate-200 " +
@@ -75,7 +80,7 @@ function Badge({
   kind,
   children,
 }: {
-  kind: "category" | "domain" | "topic";
+  kind: "category" | "domain" | "topic" | "source";
   children: React.ReactNode;
 }) {
   return (
@@ -868,6 +873,9 @@ export function DocumentsPanel() {
                                   #{t}
                                 </Badge>
                               ))}
+                              {doc.source_group && (
+                                <Badge kind="source">📄 {doc.source_group}</Badge>
+                              )}
                             </div>
                             {doc.summary && (
                               <p className="mt-1.5 line-clamp-2 text-xs text-slate-500 dark:text-brand-200/70">
