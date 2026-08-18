@@ -164,7 +164,11 @@ class DocumentInfo(BaseModel):
     id: str
     display_name: str
     filename: str
+    # uploaded_at = timestamp terakhir dokumen di-index / diperbarui.
     uploaded_at: str
+    # created_at = timestamp upload pertama, dipertahankan lintas update.
+    # Default kosong supaya entri lama (tanpa field ini) tetap valid.
+    created_at: str = ""
     # Default kosong supaya entri lama (tanpa metadata) tetap valid.
     category: str = ""
     domain: str = ""

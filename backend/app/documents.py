@@ -256,6 +256,15 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
     # Upsert berdasarkan nama file: kalau nama file sudah ada, pakai ulang id-nya
     # supaya dokumen ter-update di tempat (tidak muncul baris dobel di dashboard).
     existing = _find_by_filename(doc_id)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # created_at dicatat sekali saat dokumen pertama dibuat, lalu DIPERTAHANKAN
+    # di setiap update. uploaded_at selalu di-refresh = "terakhir diperbarui".
+    # Entri lama yang belum punya created_at di-fallback ke uploaded_at-nya.
+    created_at = (
+        (existing.get("created_at") or existing.get("uploaded_at") or now)
+        if existing
+        else now
+    )
     entry = {
         "id": existing["id"] if existing else uuid.uuid4().hex,
         "chunking": {"max_tokens": max_tokens, "overlap": overlap},
@@ -269,7 +278,8 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         "topics": meta.get("topics") or [],
         "summary": meta.get("summary") or "",
         "related": meta.get("related") or [],
-        "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created_at": created_at,
+        "uploaded_at": now,
     }
     return registry.add_doc(entry)
 

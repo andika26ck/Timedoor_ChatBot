@@ -44,6 +44,14 @@ const GHOST_BTN =
   "border-slate-200 text-jet-700 hover:bg-jet-100 " +
   "dark:border-night-600 dark:text-brand-100 dark:hover:bg-night-800";
 
+/** Format ISO-8601 -> "18 Agu 2026, 14.30" (locale id-ID, zona waktu lokal). */
+function fmtDate(iso?: string): string {
+  if (!iso) return "\u2014";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "\u2014";
+  return d.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
 function badgeClass(kind: "category" | "domain" | "topic"): string {
   if (kind === "category")
     return (
@@ -834,6 +842,12 @@ export function DocumentsPanel() {
                                 Terkait: {doc.related.join(", ")}
                               </p>
                             )}
+                            <p className="mt-1.5 text-[11px] text-slate-400 dark:text-brand-200/50">
+                              Diupload {fmtDate(doc.created_at || doc.uploaded_at)}
+                              {doc.created_at && doc.uploaded_at !== doc.created_at ? (
+                                <> · Diperbarui {fmtDate(doc.uploaded_at)}</>
+                              ) : null}
+                            </p>
                           </div>
                           <div className="flex shrink-0 gap-1.5">
                             <button onClick={() => openDetail(doc)} className={GHOST_BTN}>

@@ -59,7 +59,10 @@ export interface DocumentInfo {
   id: string;
   display_name: string;
   filename: string;
+  /** Timestamp terakhir dokumen di-index / diperbarui (ISO-8601 UTC). */
   uploaded_at: string;
+  /** Timestamp upload pertama; dipertahankan lintas update. Kosong untuk entri lama. */
+  created_at?: string;
   category: string;
   domain: string;
   topics: string[];

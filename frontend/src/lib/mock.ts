@@ -130,11 +130,13 @@ export async function create(name: string, meta?: DocumentMeta): Promise<Documen
   await delay(600);
   const cat = meta?.category ?? "";
   const display = cat && !name.toUpperCase().startsWith(`${cat}_`) ? `${cat}_${name}` : name;
+  const ts = nowIso();
   const doc: DocumentInfo = {
     id: crypto.randomUUID(),
     display_name: display,
     filename: display,
-    uploaded_at: nowIso(),
+    created_at: ts,
+    uploaded_at: ts,
     category: cat,
     domain: meta?.domain ?? "",
     topics: meta?.topics ?? [],
@@ -154,6 +156,7 @@ export async function update(id: string, name: string, meta?: DocumentMeta): Pro
       ...d,
       display_name: name,
       filename: name,
+      created_at: d.created_at ?? d.uploaded_at,
       uploaded_at: nowIso(),
       category: meta?.category ?? d.category,
       domain: meta?.domain ?? d.domain,
