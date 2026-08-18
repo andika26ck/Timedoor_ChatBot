@@ -19,6 +19,7 @@ import type {
   MetadataSuggestion,
   ModelOption,
   PopularQuestion,
+  SearchDebugResult,
   SettingsInfo,
   Taxonomy,
   TemplateInfo,
@@ -40,6 +41,9 @@ export type {
   ModelOption,
   PopularQuestion,
   RelatedDoc,
+  SearchDebugFilters,
+  SearchDebugResult,
+  SearchHit,
   SettingsInfo,
   SplitSection,
   Taxonomy,
@@ -240,6 +244,31 @@ export async function askQuestionStream(
       }
     }
   }
+}
+
+/* --------------------------- Uji Pencarian (retrieval-only) --------------------------- */
+
+/**
+ * Jalankan tahap retrieval SAJA (tanpa jawaban LLM) untuk panel "Uji Pencarian".
+ * Mengembalikan daftar chunk terurut skor + metadata untuk divisualisasikan.
+ */
+export async function debugSearch(params: {
+  question: string;
+  domain?: string;
+  topic?: string;
+  topK?: number;
+}): Promise<SearchDebugResult> {
+  if (USE_MOCK)
+    return mock.debugSearch(params.question, params.domain, params.topic, params.topK);
+  return req<SearchDebugResult>(
+    "/admin/search",
+    json("POST", {
+      question: params.question,
+      domain: params.domain || null,
+      topic: params.topic || null,
+      top_k: params.topK ?? null,
+    }),
+  );
 }
 
 /* ------------------------------ Feedback ------------------------------ */

@@ -14,6 +14,7 @@ import type {
   HealthInfo,
   MetadataSuggestion,
   PopularQuestion,
+  SearchDebugResult,
   SettingsInfo,
   TemplateInfo,
 } from "./types";
@@ -346,4 +347,63 @@ export async function updateSettings(patch: {
 
   settings = next;
   return { ...settings };
+}
+
+/* --------------------------- Uji Pencarian (mock) --------------------------- */
+
+export async function debugSearch(
+  question: string,
+  domain?: string,
+  topic?: string,
+  topK = 5,
+): Promise<SearchDebugResult> {
+  await delay(500);
+  const k = topK && topK > 0 ? Math.min(topK, 50) : 5;
+  const sources = [
+    { source: "SOP_CMS_Admin.md", domain: "CMS Admin", category: "SOP", topics: ["invoice", "status siswa"] },
+    { source: "RULES_System_Rules.md", domain: "System Rules", category: "RULES", topics: ["prioritas status"] },
+    { source: "FAQ_Teacher_Journal.md", domain: "Teacher", category: "FAQ", topics: ["meeting journal"] },
+    { source: "GLOSSARY_Tentang_Sistem.md", domain: "Tentang Sistem", category: "GLOSSARY", topics: ["glosarium"] },
+    { source: "SOP_Akun_Akses.md", domain: "Akun & Akses", category: "SOP", topics: ["login", "reset password"] },
+  ];
+  const results = Array.from({ length: k }, (_, i) => {
+    const s = sources[i % sources.length];
+    const score = Math.max(0.12, 0.92 - i * 0.11);
+    const text =
+      `[MOCK] Cuplikan chunk #${i + 1} dari ${s.source} untuk pertanyaan "${question}". ` +
+      "Ini teks contoh untuk menguji visualisasi skor & daftar chunk tanpa backend. " +
+      "Set VITE_USE_MOCK=false untuk memakai retrieval asli dari PostgreSQL/pgvector.";
+    return {
+      rank: i + 1,
+      score: Number(score.toFixed(4)),
+      id: `${s.source}::${i}`,
+      doc_id: s.source,
+      source: s.source,
+      doc_name: s.source,
+      chunk_index: i,
+      domain: s.domain,
+      category: s.category,
+      topics: s.topics,
+      approx_tokens: 180 - i * 12,
+      char_count: text.length,
+      text,
+    };
+  });
+  return {
+    query: question,
+    search_query: question,
+    rewritten: false,
+    top_k: k,
+    candidates: Math.max(k, 25),
+    returned: results.length,
+    filters: {
+      domain: domain ?? "",
+      topic: topic ?? "",
+      domain_applied: Boolean(domain),
+      domain_fallback: false,
+      topic_applied: Boolean(topic),
+      topic_fallback: false,
+    },
+    results,
+  };
 }

@@ -28,6 +28,10 @@ logger = logging.getLogger("faq-bot")
 # Berapa chunk yang dipakai sebagai konteks jawaban.
 TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 
+# Batas atas Top-K untuk panel "Uji Pencarian" (retrieval-only) di sisi admin,
+# supaya admin tidak meminta terlalu banyak chunk sekaligus.
+_DEBUG_MAX_TOP_K = int(os.getenv("RAG_DEBUG_MAX_TOP_K", "50"))
+
 _TRANSIENT = ("503", "unavailable", "overloaded", "high demand", "deadline")
 _MAX_RETRIES = 3
 
@@ -302,3 +306,144 @@ def ask_stream(
 
     yield {"type": "citations", "value": citations}
     yield {"type": "related", "value": related_docs_for(citations)}
+
+
+# --------------------------------------------------------------------------
+# Uji Pencarian (retrieval-only) — untuk panel debug admin
+# --------------------------------------------------------------------------
+def _topics_of(entry: dict | None, meta: dict) -> list[str]:
+    """Daftar topik dari registry (list) atau metadata chunk (string CSV)."""
+    if entry and entry.get("topics"):
+        return [str(t).strip() for t in entry.get("topics") if str(t).strip()]
+    raw = (meta or {}).get("topics")
+    if isinstance(raw, str):
+        return [t.strip() for t in raw.split(",") if t.strip()]
+    if isinstance(raw, list):
+        return [str(t).strip() for t in raw if str(t).strip()]
+    return []
+
+
+def search_debug(
+    question: str,
+    domain: str | None = None,
+    topic: str | None = None,
+    top_k: int | None = None,
+    history: list[dict] | None = None,
+    condense: bool = False,
+) -> dict:
+    """Retrieval-only untuk panel "Uji Pencarian" (visualisasi chunk/skor).
+
+    Menjalankan embedding pertanyaan + pencarian vektor lalu mengembalikan
+    daftar chunk TERURUT SKOR beserta metadata \u2014 TANPA memanggil model
+    penjawab. Berguna untuk memeriksa kualitas retrieval, dampak filter
+    domain/topik, dan sebaran skor sebelum jawaban LLM dibuat.
+
+    Berbeda dari alur `ask()`, penulisan ulang pertanyaan (multi-turn) di sini
+    default MATI supaya admin melihat persis apa yang terambil untuk teks yang
+    mereka ketik; nyalakan lewat `condense=True` bila perlu.
+    """
+    if not get_store_name():
+        raise _empty_kb_error()
+
+    q_raw = (question or "").strip()
+    if not q_raw:
+        raise ValueError("Pertanyaan tidak boleh kosong.")
+
+    search_q = _condense_question(q_raw, history) if (condense and history) else q_raw
+
+    k = TOP_K if not top_k or int(top_k) <= 0 else min(int(top_k), _DEBUG_MAX_TOP_K)
+
+    store = get_vector_store()
+    qvec = embed_query(search_q)
+
+    domain = (domain or "").strip()
+    topic = (topic or "").strip()
+    need_filter = bool(domain or topic)
+    fetch_k = max(k * 5, 25) if need_filter else k
+
+    raw_hits = store.search(list(qvec), top_k=fetch_k)
+    candidates = len(raw_hits)
+
+    hits = raw_hits
+    domain_applied = domain_fallback = False
+    if domain:
+        filtered = [h for h in hits if _match_domain(h.get("metadata"), domain)]
+        if filtered:
+            hits, domain_applied = filtered, True
+        else:
+            domain_fallback = True
+
+    topic_applied = topic_fallback = False
+    if topic:
+        allowed = _files_for_topic(topic)
+        if allowed:
+            filtered = [h for h in hits if _doc_id_of(h) in allowed]
+            if filtered:
+                hits, topic_applied = filtered, True
+            else:
+                topic_fallback = True
+        else:
+            topic_fallback = True
+
+    top_hits = hits[:k]
+
+    by_file = {d.get("filename"): d for d in registry.list_docs()}
+    results: list[dict] = []
+    for rank, h in enumerate(top_hits, start=1):
+        meta = h.get("metadata") or {}
+        doc_id = _doc_id_of(h)
+        entry = by_file.get(doc_id)
+        source = (
+            (entry.get("display_name") if entry else None)
+            or meta.get("judul")
+            or meta.get("display_name")
+            or meta.get("doc_name")
+            or doc_id
+            or "dokumen"
+        )
+        text = h.get("text") or ""
+        chunk_index = meta.get("chunk_index")
+        approx = meta.get("approx_tokens")
+        results.append(
+            {
+                "rank": rank,
+                "score": round(float(h.get("score") or 0.0), 6),
+                "id": str(h.get("id") or ""),
+                "doc_id": doc_id,
+                "source": source,
+                "doc_name": meta.get("doc_name") or "",
+                "chunk_index": int(chunk_index)
+                if isinstance(chunk_index, (int, float))
+                else None,
+                "domain": (entry.get("domain") if entry else None)
+                or meta.get("domain")
+                or "",
+                "category": (entry.get("category") if entry else None)
+                or meta.get("kategori")
+                or "",
+                "topics": _topics_of(entry, meta),
+                "approx_tokens": int(approx)
+                if isinstance(approx, (int, float))
+                else None,
+                "char_count": len(text),
+                "text": text,
+            }
+        )
+
+    return {
+        "query": q_raw,
+        "search_query": search_q,
+        "rewritten": bool(search_q != q_raw),
+        "top_k": k,
+        "candidates": candidates,
+        "returned": len(results),
+        "filters": {
+            "domain": domain,
+            "topic": topic,
+            "domain_applied": domain_applied,
+            "domain_fallback": domain_fallback,
+            "topic_applied": topic_applied,
+            "topic_fallback": topic_fallback,
+        },
+        "results": results,
+    }

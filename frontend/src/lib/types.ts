@@ -171,3 +171,50 @@ export interface ChatLogMessage {
   topic?: string;
   created_at: string;
 }
+
+/* ------------------------------ Uji Pencarian (retrieval-only) ------------------------------ */
+
+/** Satu chunk hasil retrieval beserta skor & metadata (panel Uji Pencarian). */
+export interface SearchHit {
+  rank: number;
+  /** Skor kemiripan kosinus (1 - jarak). Umumnya 0..1; makin besar makin mirip. */
+  score: number;
+  id: string;
+  doc_id: string;
+  /** Nama tampilan dokumen (dari registry bila ada). */
+  source: string;
+  doc_name: string;
+  chunk_index: number | null;
+  domain: string;
+  category: string;
+  topics: string[];
+  approx_tokens: number | null;
+  char_count: number;
+  text: string;
+}
+
+/** Ringkasan filter yang diminta & apakah benar-benar diterapkan. */
+export interface SearchDebugFilters {
+  domain: string;
+  topic: string;
+  domain_applied: boolean;
+  /** true = filter domain diminta tapi kosong, jadi di-fallback tanpa filter. */
+  domain_fallback: boolean;
+  topic_applied: boolean;
+  topic_fallback: boolean;
+}
+
+/** Respons POST /admin/search: daftar chunk + skor untuk divisualisasikan. */
+export interface SearchDebugResult {
+  /** Pertanyaan asli yang diketik admin. */
+  query: string;
+  /** Pertanyaan yang benar-benar dipakai untuk embedding (bisa hasil rewrite). */
+  search_query: string;
+  rewritten: boolean;
+  top_k: number;
+  /** Jumlah kandidat mentah sebelum dipangkas ke top_k. */
+  candidates: number;
+  returned: number;
+  filters: SearchDebugFilters;
+  results: SearchHit[];
+}

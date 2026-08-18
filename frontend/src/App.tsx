@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChatLogsPanel } from "./components/ChatLogsPanel";
 import { DocumentsPanel } from "./components/DocumentsPanel";
+import { SearchTestPanel } from "./components/SearchTestPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import StatusBadge from "./components/StatusBadge";
 import { BrandAvatar } from "./components/ui/BrandAvatar";
@@ -9,10 +10,11 @@ import { ThemeToggle } from "./components/ui/ThemeToggle";
 import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
 
-type View = "chat" | "logs" | "docs" | "settings";
+type View = "chat" | "search" | "logs" | "docs" | "settings";
 
 const TITLES: Record<View, string> = {
   chat: "Chat (uji coba)",
+  search: "Uji Pencarian",
   logs: "Riwayat Pengguna",
   docs: "Kelola Dokumen",
   settings: "Kelola DB",
@@ -67,6 +69,12 @@ export default function App() {
             onClick={() => setView("chat")}
           />
           <NavItem
+            label="Uji Pencarian"
+            icon="🔎"
+            active={view === "search"}
+            onClick={() => setView("search")}
+          />
+          <NavItem
             label="Riwayat"
             icon="🕒"
             active={view === "logs"}
@@ -104,6 +112,9 @@ export default function App() {
         <div className="min-h-0 flex-1">
           <div className={view === "chat" ? "h-full" : "hidden"}>
             <ChatPanel active={view === "chat"} showFilter multiTurn />
+          </div>
+          <div className={view === "search" ? "h-full" : "hidden"}>
+            <SearchTestPanel />
           </div>
           <div className={view === "logs" ? "h-full" : "hidden"}>
             <ChatLogsPanel />

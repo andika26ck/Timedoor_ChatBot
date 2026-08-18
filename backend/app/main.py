@@ -34,7 +34,7 @@ from app.documents import (
     update_text,
 )
 from app.errors import explain
-from app.rag import ask, ask_stream
+from app.rag import ask, ask_stream, search_debug
 from app.store import get_store_name
 from app.schemas import (
     AddTextRequest,
@@ -51,6 +51,8 @@ from app.schemas import (
     ModelOption,
     PopularQuestion,
     ResetResponse,
+    SearchDebugRequest,
+    SearchDebugResponse,
     SettingsInfo,
     SettingsUpdate,
     TaxonomyInfo,
@@ -308,6 +310,39 @@ def ask_stream_endpoint(req: AskRequest):
             "X-Accel-Buffering": "no",  # cegah buffering proxy
         },
     )
+
+
+# --------------------------- Uji Pencarian (retrieval-only) ---------------------------
+
+
+@app.post("/admin/search", response_model=SearchDebugResponse)
+def admin_search_endpoint(req: SearchDebugRequest):
+    """Uji Pencarian: jalankan retrieval saja lalu kembalikan chunk + skor.
+
+    TIDAK memanggil model penjawab. Dipakai panel debug admin untuk melihat
+    dokumen/chunk mana yang terambil untuk sebuah pertanyaan, berapa skor
+    kemiripannya, dan bagaimana filter domain/topik memengaruhi hasil.
+    """
+    question = (req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
+    history = [
+        {"role": t.role, "text": t.text}
+        for t in (req.history or [])
+        if (t.text or "").strip() and (t.role or "").strip().lower() in ("user", "assistant")
+    ]
+    try:
+        return search_debug(
+            question,
+            req.domain,
+            req.topic,
+            top_k=req.top_k,
+            history=history,
+            condense=req.condense,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal menjalankan uji pencarian")
+        raise _http_error(exc) from exc
 
 
 # ----------------------- Riwayat Pengguna (admin) -----------------------

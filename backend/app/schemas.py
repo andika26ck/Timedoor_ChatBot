@@ -46,6 +46,71 @@ class AskResponse(BaseModel):
     related_docs: list[RelatedDoc] = []
 
 
+# ------------------------------ Uji Pencarian (retrieval-only) ------------------------------
+
+
+class SearchDebugRequest(BaseModel):
+    """Permintaan panel "Uji Pencarian": jalankan retrieval saja (tanpa LLM)."""
+
+    question: str
+    # Level 3: batasi ke satu domain. Kosong/None = semua.
+    domain: str | None = None
+    # Level 1: batasi ke satu label topik. Kosong/None = semua.
+    topic: str | None = None
+    # Berapa chunk teratas yang dikembalikan. None/<=0 = default (RAG_TOP_K).
+    top_k: int | None = None
+    # Multi-turn opsional (untuk uji penulisan ulang pertanyaan).
+    history: list[ChatTurn] = []
+    # True = tulis ulang pertanyaan lanjutan dulu (butuh history). Default mati.
+    condense: bool = False
+
+
+class SearchHit(BaseModel):
+    """Satu chunk hasil retrieval beserta skor & metadata untuk visualisasi."""
+
+    rank: int
+    # Skor kemiripan kosinus (1 - jarak). Umumnya 0..1; makin besar makin mirip.
+    score: float
+    id: str = ""
+    doc_id: str = ""
+    # Nama tampilan dokumen (dari registry bila ada).
+    source: str = ""
+    doc_name: str = ""
+    chunk_index: int | None = None
+    domain: str = ""
+    category: str = ""
+    topics: list[str] = []
+    approx_tokens: int | None = None
+    char_count: int = 0
+    text: str = ""
+
+
+class SearchDebugFilters(BaseModel):
+    """Ringkasan filter yang diminta & apakah benar-benar diterapkan."""
+
+    domain: str = ""
+    topic: str = ""
+    domain_applied: bool = False
+    # True = filter domain diminta tapi tak ada hasil -> fallback tanpa filter.
+    domain_fallback: bool = False
+    topic_applied: bool = False
+    topic_fallback: bool = False
+
+
+class SearchDebugResponse(BaseModel):
+    # Pertanyaan asli yang diketik admin.
+    query: str
+    # Pertanyaan yang benar-benar dipakai untuk embedding (bisa hasil rewrite).
+    search_query: str
+    rewritten: bool = False
+    top_k: int
+    # Jumlah kandidat mentah sebelum dipangkas ke top_k.
+    candidates: int
+    returned: int
+    filters: SearchDebugFilters
+    results: list[SearchHit] = []
+
+
 class ChatLogMessage(BaseModel):
     """Satu giliran percakapan yang tercatat (detail sesi, sisi admin)."""
 
