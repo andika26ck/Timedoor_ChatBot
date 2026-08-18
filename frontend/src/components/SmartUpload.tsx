@@ -26,7 +26,7 @@ const LABEL = "block text-xs font-medium text-jet-700 dark:text-brand-100";
 const CARD = "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
 
 /**
- * Upload Pintar: unggah 1 dokumen besar, pecah otomatis per heading H2 (##),
+ * Smart Upload: unggah 1 dokumen besar, pecah otomatis per heading H2 (##),
  * beri saran metadata, tinjau/edit, lalu simpan tiap bagian sebagai dokumen.
  */
 export function SmartUpload({

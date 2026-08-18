@@ -229,7 +229,9 @@ function EditModal({
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
-            <div className="text-sm text-slate-500 dark:text-brand-200/70">Memuat isi dokumen...</div>
+            <div className="text-sm text-slate-500 dark:text-brand-200/70">
+              Memuat isi dokumen...
+            </div>
           ) : (
             <>
               <label className={LABEL}>Isi teks</label>
@@ -598,7 +600,7 @@ export function DocumentsPanel() {
                   : "text-jet-700 hover:bg-jet-100 dark:text-brand-100 dark:hover:bg-night-700"
               }`}
             >
-              ✨ Upload Pintar
+              Smart Upload
             </button>
           </div>
 

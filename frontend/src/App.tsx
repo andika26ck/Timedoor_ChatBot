@@ -12,8 +12,8 @@ type View = "chat" | "docs" | "settings";
 
 const TITLES: Record<View, string> = {
   chat: "Chat",
-  docs: "Kelola Dokumen",
-  settings: "Kelola DB",
+  docs: "Upload Dokumen",
+  settings: "System Prompt",
 };
 
 export default function App() {
@@ -71,7 +71,7 @@ export default function App() {
             onClick={() => setView("docs")}
           />
           <NavItem
-            label="Kelola DB"
+            label="System Prompt"
             icon="⚙️"
             active={view === "settings"}
             onClick={() => setView("settings")}
