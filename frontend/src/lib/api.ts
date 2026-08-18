@@ -9,6 +9,7 @@ import * as mock from "./mock";
 import type {
   AskResponse,
   AutoSplitResult,
+  ChatHistoryTurn,
   DocumentContent,
   DocumentInfo,
   DocumentMeta,
@@ -25,6 +26,7 @@ import type {
 export type {
   AskResponse,
   AutoSplitResult,
+  ChatHistoryTurn,
   Citation,
   DocumentContent,
   DocumentInfo,
@@ -135,6 +137,7 @@ export async function askQuestionStream(
   question: string,
   domain: string | undefined,
   topic: string | undefined,
+  history: ChatHistoryTurn[],
   handlers: AskStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -149,7 +152,12 @@ export async function askQuestionStream(
   const res = await fetch(`${API_URL}/ask/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, domain: domain || null, topic: topic || null }),
+    body: JSON.stringify({
+      question,
+      domain: domain || null,
+      topic: topic || null,
+      history: history ?? [],
+    }),
     signal,
   });
 

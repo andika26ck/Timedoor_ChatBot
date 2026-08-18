@@ -15,3 +15,15 @@ export interface ChatMessage {
   askedText?: string;
   feedback?: FeedbackValue;
 }
+
+/**
+ * Satu percakapan tersimpan (fitur "Riwayat percakapan").
+ * Disimpan di localStorage; dipakai oleh sidebar riwayat di dashboard admin.
+ */
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}

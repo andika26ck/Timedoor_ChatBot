@@ -1,12 +1,26 @@
 from pydantic import BaseModel
 
 
+class ChatTurn(BaseModel):
+    """Satu giliran percakapan sebelumnya (untuk fitur multi-turn).
+
+    Dikirim frontend agar bot bisa "mengingat" konteks percakapan. role hanya
+    "user" atau "assistant"; text adalah isi pesan apa adanya.
+    """
+
+    role: str = "user"
+    text: str = ""
+
+
 class AskRequest(BaseModel):
     question: str
     # Level 3: batasi pencarian ke satu domain (mis. "HR"). Kosong/None = semua.
     domain: str | None = None
     # Level 1: batasi pencarian ke satu label topik. Kosong/None = semua.
     topic: str | None = None
+    # Multi-turn: beberapa giliran terakhir percakapan (opsional). Kosong =
+    # pertanyaan berdiri sendiri, sama seperti perilaku lama.
+    history: list[ChatTurn] = []
 
 
 class Citation(BaseModel):

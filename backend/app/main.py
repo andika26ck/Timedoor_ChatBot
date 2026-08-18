@@ -151,6 +151,22 @@ def _meta_from_text(req: AddTextRequest) -> dict:
     }
 
 
+def _history_payload(req: AskRequest) -> list[dict]:
+    """Ambil riwayat percakapan dari request untuk fitur multi-turn.
+
+    Hanya menyertakan giliran user/assistant yang berisi teks, dibatasi ke
+    beberapa pesan terakhir supaya prompt tetap ramping.
+    """
+    out: list[dict] = []
+    for turn in (req.history or [])[-12:]:
+        text = (turn.text or "").strip()
+        role = (turn.role or "").strip().lower()
+        if not text or role not in ("user", "assistant"):
+            continue
+        out.append({"role": role, "text": text})
+    return out
+
+
 @app.get("/")
 def root():
     return {"service": "Timedoor FAQ Bot API", "docs": "/docs"}
@@ -212,7 +228,7 @@ def ask_endpoint(req: AskRequest):
     if not question:
         raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
     try:
-        result = ask(question, req.domain, req.topic)
+        result = ask(question, req.domain, req.topic, history=_history_payload(req))
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memproses pertanyaan")
         raise _http_error(exc) from exc
@@ -239,12 +255,14 @@ def ask_stream_endpoint(req: AskRequest):
     if not question:
         raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
 
+    history = _history_payload(req)
+
     def sse(payload: dict) -> str:
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     def event_source():
         try:
-            for event in ask_stream(question, req.domain, req.topic):
+            for event in ask_stream(question, req.domain, req.topic, history=history):
                 yield sse(event)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Gagal memproses pertanyaan (stream)")

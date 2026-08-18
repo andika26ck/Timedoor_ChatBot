@@ -19,7 +19,7 @@ from google.genai import types
 
 from app import registry
 from app.related import related_docs_for
-from app.settings_store import get_model, get_system_prompt
+from app.settings_store import get_classify_model, get_model, get_system_prompt
 from app.store import client, get_store_name, get_vector_store
 from engine.embedder import embed_query
 
@@ -137,14 +137,84 @@ def _build_context(hits: list[dict]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _prompt(question: str, hits: list[dict]) -> str:
+# --------------------------------------------------------------------------
+# Multi-turn: riwayat percakapan & penulisan ulang pertanyaan
+# --------------------------------------------------------------------------
+# Berapa pesan terakhir yang dijadikan konteks (jaga-jaga bila frontend kirim
+# lebih banyak).
+_HISTORY_MAX_TURNS = 6
+# Potong tiap pesan riwayat agar prompt tidak membengkak.
+_HISTORY_MAX_CHARS = 800
+# Batas token untuk penulisan ulang pertanyaan (murah; pakai model classify).
+_CONDENSE_MAX_TOKENS = 256
+
+
+def _transcript(history: list[dict] | None) -> str:
+    """Rangkai beberapa giliran terakhir jadi transkrip ringkas untuk prompt."""
+    turns = [h for h in (history or []) if str(h.get("text") or "").strip()]
+    turns = turns[-_HISTORY_MAX_TURNS:]
+    lines: list[str] = []
+    for h in turns:
+        role = "User" if str(h.get("role")).strip().lower() == "user" else "Cobee"
+        text = str(h.get("text") or "").strip()
+        if len(text) > _HISTORY_MAX_CHARS:
+            text = text[:_HISTORY_MAX_CHARS] + "\u2026"
+        lines.append(f"{role}: {text}")
+    return "\n".join(lines)
+
+
+def _condense_question(question: str, history: list[dict] | None) -> str:
+    """Ubah pertanyaan lanjutan yang ambigu jadi satu pertanyaan mandiri.
+
+    Dipakai HANYA untuk retrieval (pencarian dokumen), supaya pertanyaan
+    seperti "kalau yang itu gimana?" tetap menemukan dokumen yang tepat.
+    Memakai model classify (flash-lite) agar tidak menghabiskan kuota model
+    penjawab. Kalau gagal (kuota/eror), aman: pakai pertanyaan aslinya.
+    """
+    convo = _transcript(history)
+    if not convo:
+        return question
+    prompt = (
+        "Tugasmu HANYA menulis ulang PERTANYAAN LANJUTAN menjadi satu pertanyaan "
+        "mandiri yang utuh dan bisa dipahami tanpa membaca riwayat. Pertahankan "
+        "bahasa aslinya. Jika sudah mandiri, salin apa adanya. Jangan menjawab "
+        "pertanyaannya. Keluarkan HANYA teks pertanyaannya, tanpa tanda kutip.\n\n"
+        f"RIWAYAT:\n{convo}\n\n"
+        f"PERTANYAAN LANJUTAN: {question}\n\n"
+        "PERTANYAAN MANDIRI:"
+    )
+    try:
+        resp = client.models.generate_content(
+            model=get_classify_model(),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=_CONDENSE_MAX_TOKENS,
+            ),
+        )
+        out = (getattr(resp, "text", "") or "").strip().strip('"').strip()
+        return out or question
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Penulisan ulang pertanyaan gagal, pakai aslinya: %s", exc)
+        return question
+
+
+def _prompt(question: str, hits: list[dict], history: list[dict] | None = None) -> str:
+    convo = _transcript(history)
+    convo_block = (
+        f"RIWAYAT PERCAKAPAN (konteks; jangan diulang di jawaban):\n{convo}\n\n"
+        if convo
+        else ""
+    )
     if hits:
         return (
+            f"{convo_block}"
             f"KONTEKS:\n{_build_context(hits)}\n\n"
             f"PERTANYAAN: {question}\n\n"
             "Jawab hanya berdasarkan KONTEKS di atas."
         )
     return (
+        f"{convo_block}"
         f"PERTANYAAN: {question}\n\n"
         "Tidak ada konteks yang relevan di knowledge base. Sampaikan dengan jujur "
         "bahwa informasinya belum tersedia dan sarankan menghubungi tim terkait."
@@ -167,12 +237,18 @@ def _is_transient(msg: str) -> bool:
 # --------------------------------------------------------------------------
 # API publik
 # --------------------------------------------------------------------------
-def ask(question: str, domain: str | None = None, topic: str | None = None) -> dict:
+def ask(
+    question: str,
+    domain: str | None = None,
+    topic: str | None = None,
+    history: list[dict] | None = None,
+) -> dict:
     if not get_store_name():
         raise _empty_kb_error()
 
-    hits = _retrieve(question, domain, topic)
-    prompt = _prompt(question, hits)
+    search_q = _condense_question(question, history) if history else question
+    hits = _retrieve(search_q, domain, topic)
+    prompt = _prompt(question, hits, history)
 
     last_exc: Exception | None = None
     for attempt in range(_MAX_RETRIES):
@@ -199,14 +275,20 @@ def ask(question: str, domain: str | None = None, topic: str | None = None) -> d
     raise last_exc
 
 
-def ask_stream(question: str, domain: str | None = None, topic: str | None = None):
+def ask_stream(
+    question: str,
+    domain: str | None = None,
+    topic: str | None = None,
+    history: list[dict] | None = None,
+):
     """Generator event untuk SSE. Urutan: text* -> citations -> related."""
     if not get_store_name():
         raise _empty_kb_error()
 
-    hits = _retrieve(question, domain, topic)
+    search_q = _condense_question(question, history) if history else question
+    hits = _retrieve(search_q, domain, topic)
     citations = _citations(hits) if hits else []
-    prompt = _prompt(question, hits)
+    prompt = _prompt(question, hits, history)
 
     stream = client.models.generate_content_stream(
         model=get_model(),

@@ -40,6 +40,12 @@ export interface AskResponse {
   related_docs?: RelatedDoc[];
 }
 
+/** Satu giliran percakapan yang dikirim ke backend untuk konteks multi-turn. */
+export interface ChatHistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
 /** Metadata akurasi untuk sebuah dokumen (Level 1 & 3 + konvensi nama). */
 export interface DocumentMeta {
   category?: string;

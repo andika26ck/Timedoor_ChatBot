@@ -95,7 +95,7 @@ export default function App() {
 
         <div className="min-h-0 flex-1">
           <div className={view === "chat" ? "h-full" : "hidden"}>
-            <ChatPanel active={view === "chat"} showFilter />
+            <ChatPanel active={view === "chat"} showFilter withHistory multiTurn />
           </div>
           <div className={view === "docs" ? "h-full" : "hidden"}>
             <DocumentsPanel />
