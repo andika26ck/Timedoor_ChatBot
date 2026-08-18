@@ -369,6 +369,9 @@ export function DocumentsPanel() {
   const [categories, setCategories] = useState<string[]>(CATEGORIES);
   const [domainOptions, setDomainOptions] = useState<string[]>(DOMAINS);
 
+  // filter bersih-bersih manual per grup sumber (Smart Upload)
+  const [groupFilter, setGroupFilter] = useState<string>("");
+
   // detail modal
   const [detail, setDetail] = useState<DocumentContent | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -575,12 +578,47 @@ export function DocumentsPanel() {
     }
   }
 
+  // Daftar grup sumber unik (untuk filter & bersih-bersih manual).
+  const sourceGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of docs) {
+      const g = (d.source_group || "").trim();
+      if (g) set.add(g);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [docs]);
+
+  // Hapus semua dokumen dalam satu grup sumber (bersih-bersih tanpa unggah ulang).
+  async function handleDeleteGroup() {
+    const g = groupFilter.trim();
+    if (!g) return;
+    const targets = docs.filter((d) => (d.source_group || "").trim() === g);
+    if (!targets.length) return;
+    if (
+      !confirm(
+        `Hapus semua ${targets.length} dokumen di grup "${g}"? Tindakan ini tidak bisa dibatalkan.`,
+      )
+    )
+      return;
+    try {
+      for (const d of targets) await deleteDocument(d.id);
+      setNotice(`${targets.length} dokumen di grup "${g}" dihapus.`);
+      setGroupFilter("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menghapus grup.");
+    }
+  }
+
   // Level 3: kelompokkan dokumen per domain untuk ditampilkan.
   const grouped = useMemo(() => {
     const keyOf = (d: DocumentInfo) =>
       (sortBy.startsWith("created") ? d.created_at || d.uploaded_at : d.uploaded_at) || "";
     const dir = sortBy.endsWith("asc") ? 1 : -1;
-    const sortedDocs = [...docs].sort((a, b) => {
+    const base = groupFilter
+      ? docs.filter((d) => (d.source_group || "").trim() === groupFilter)
+      : docs;
+    const sortedDocs = [...base].sort((a, b) => {
       const av = keyOf(a);
       const bv = keyOf(b);
       return av < bv ? -dir : av > bv ? dir : 0;
@@ -593,7 +631,7 @@ export function DocumentsPanel() {
     }
     const order = [...domainOptions, UNGROUPED];
     return [...map.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-  }, [docs, domainOptions, sortBy]);
+  }, [docs, domainOptions, sortBy, groupFilter]);
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
@@ -815,6 +853,29 @@ export function DocumentsPanel() {
               Daftar dokumen ({docs.length})
             </h3>
             <div className="flex items-center gap-3">
+              {sourceGroups.length > 0 && (
+                <select
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  title="Filter berdasarkan grup sumber (Smart Upload)"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-800 dark:text-brand-100"
+                >
+                  <option value="">Semua grup</option>
+                  {sourceGroups.map((g) => (
+                    <option key={g} value={g}>
+                      📄 {g}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {groupFilter && (
+                <button
+                  onClick={handleDeleteGroup}
+                  className="text-xs text-blush transition hover:underline dark:text-blush-400"
+                >
+                  Hapus grup ini
+                </button>
+              )}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
