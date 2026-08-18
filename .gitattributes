@@ -1,0 +1,17 @@
+# Normalisasi akhir baris: cegah "churn" CRLF<->LF lintas OS (Windows/macOS/Linux).
+# Semua file teks disimpan sebagai LF di repo.
+* text=auto eol=lf
+
+# File biner: jangan diutak-atik.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.zip  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
