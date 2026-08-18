@@ -21,6 +21,8 @@ import { SmartUpload } from "./SmartUpload";
 
 type Mode = "file" | "text" | "smart";
 
+type SortKey = "updated_desc" | "updated_asc" | "created_desc" | "created_asc";
+
 const UNGROUPED = "Tanpa domain";
 
 /**
@@ -91,10 +93,14 @@ function Badge({
 function DetailModal({
   data,
   loading,
+  createdAt,
+  updatedAt,
   onClose,
 }: {
   data: DocumentContent | null;
   loading: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   onClose: () => void;
 }) {
   return (
@@ -117,6 +123,14 @@ function DetailModal({
             ✕
           </button>
         </div>
+        {!loading && (createdAt || updatedAt) && (
+          <div className="border-b border-slate-100 px-5 py-2 text-[11px] text-slate-400 dark:border-night-800 dark:text-brand-200/60">
+            Diupload {fmtDate(createdAt || updatedAt)}
+            {createdAt && updatedAt && updatedAt !== createdAt ? (
+              <> · Diperbarui {fmtDate(updatedAt)}</>
+            ) : null}
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="text-sm text-slate-500 dark:text-brand-200/70">
@@ -354,6 +368,8 @@ export function DocumentsPanel() {
   const [detail, setDetail] = useState<DocumentContent | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailDoc, setDetailDoc] = useState<DocumentInfo | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>("updated_desc");
 
   // edit teks in-place
   const [editing, setEditing] = useState<DocumentInfo | null>(null);
@@ -507,6 +523,7 @@ export function DocumentsPanel() {
 
   async function openDetail(doc: DocumentInfo) {
     setDetailOpen(true);
+    setDetailDoc(doc);
     setDetailLoading(true);
     setDetail(null);
     try {
@@ -555,15 +572,23 @@ export function DocumentsPanel() {
 
   // Level 3: kelompokkan dokumen per domain untuk ditampilkan.
   const grouped = useMemo(() => {
+    const keyOf = (d: DocumentInfo) =>
+      (sortBy.startsWith("created") ? d.created_at || d.uploaded_at : d.uploaded_at) || "";
+    const dir = sortBy.endsWith("asc") ? 1 : -1;
+    const sortedDocs = [...docs].sort((a, b) => {
+      const av = keyOf(a);
+      const bv = keyOf(b);
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
     const map = new Map<string, DocumentInfo[]>();
-    for (const d of docs) {
+    for (const d of sortedDocs) {
       const key = d.domain?.trim() || UNGROUPED;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(d);
     }
     const order = [...domainOptions, UNGROUPED];
     return [...map.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-  }, [docs, domainOptions]);
+  }, [docs, domainOptions, sortBy]);
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
@@ -620,6 +645,7 @@ export function DocumentsPanel() {
                 setNotice(`${n} dokumen berhasil dibuat dari 1 file.`);
                 refresh();
               }}
+              onRefresh={refresh}
               onError={(m) => setError(m)}
             />
           ) : (
@@ -784,6 +810,17 @@ export function DocumentsPanel() {
               Daftar dokumen ({docs.length})
             </h3>
             <div className="flex items-center gap-3">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                title="Urutkan dokumen"
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-800 dark:text-brand-100"
+              >
+                <option value="updated_desc">Terbaru diperbarui</option>
+                <option value="updated_asc">Terlama diperbarui</option>
+                <option value="created_desc">Terbaru diupload</option>
+                <option value="created_asc">Terlama diupload</option>
+              </select>
               <button
                 onClick={refresh}
                 className="text-xs text-brand-700 transition hover:underline dark:text-brand-300"
@@ -892,7 +929,13 @@ export function DocumentsPanel() {
         />
 
         {detailOpen && (
-          <DetailModal data={detail} loading={detailLoading} onClose={() => setDetailOpen(false)} />
+          <DetailModal
+            data={detail}
+            loading={detailLoading}
+            createdAt={detailDoc?.created_at || detailDoc?.uploaded_at}
+            updatedAt={detailDoc?.uploaded_at}
+            onClose={() => setDetailOpen(false)}
+          />
         )}
 
         {editing && (

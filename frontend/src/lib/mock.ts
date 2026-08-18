@@ -142,6 +142,7 @@ export async function create(name: string, meta?: DocumentMeta): Promise<Documen
     topics: meta?.topics ?? [],
     summary: meta?.summary ?? "",
     related: meta?.related ?? [],
+    source_group: meta?.source_group ?? "",
   };
   documents = [doc, ...documents];
   return doc;
@@ -163,6 +164,7 @@ export async function update(id: string, name: string, meta?: DocumentMeta): Pro
       topics: meta?.topics ?? d.topics,
       summary: meta?.summary ?? d.summary,
       related: meta?.related ?? d.related,
+      source_group: meta?.source_group ?? d.source_group,
     };
     return updated;
   });
@@ -172,6 +174,19 @@ export async function update(id: string, name: string, meta?: DocumentMeta): Pro
 export async function remove(id: string): Promise<void> {
   await delay(300);
   documents = documents.filter((d) => d.id !== id);
+}
+
+export async function scanOrphans(
+  sourceGroup: string,
+  keepFilenames: string[],
+): Promise<DocumentInfo[]> {
+  await delay(200);
+  const group = (sourceGroup || "").trim();
+  if (!group) return [];
+  const keep = new Set(keepFilenames.filter(Boolean));
+  return documents.filter(
+    (d) => (d.source_group || "").trim() === group && !keep.has(d.filename),
+  );
 }
 
 /* --------------------------- Upload Pintar (auto-split) --------------------------- */

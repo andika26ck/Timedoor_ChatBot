@@ -154,6 +154,9 @@ class AddTextRequest(BaseModel):
     topics: list[str] = []
     summary: str = ""
     related: list[str] = []
+    # Grup sumber (Smart Upload): dipakai untuk mendeteksi & menghapus bagian
+    # lama yang jadi "yatim" saat dokumen sumber yang sama diunggah ulang.
+    source_group: str = ""
     # Perilaku bila nama file sudah ada:
     #   "overwrite" (default) = timpa dokumen lama (id & chunk dipakai ulang)
     #   "new"                 = paksa jadi dokumen baru dengan nama unik (-2, -3)
@@ -175,6 +178,21 @@ class DocumentInfo(BaseModel):
     topics: list[str] = []
     summary: str = ""
     related: list[str] = []
+    # Grup sumber (Smart Upload) untuk fitur auto-hapus bagian lama.
+    source_group: str = ""
+
+
+class OrphanScanRequest(BaseModel):
+    """Cari bagian lama yang jadi 'yatim' untuk satu grup sumber Smart Upload.
+
+    source_group   = penanda dokumen sumber (mis. nama file besar aslinya).
+    keep_filenames = nama file (final) bagian yang BARU saja disimpan; bagian
+                     lama di grup yang sama tapi tidak ada di daftar ini
+                     dianggap yatim dan bisa dihapus.
+    """
+
+    source_group: str = ""
+    keep_filenames: list[str] = []
 
 
 class DocumentContent(BaseModel):

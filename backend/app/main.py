@@ -27,6 +27,7 @@ from app.documents import (
     add_text,
     delete_doc,
     extract_text,
+    find_orphans,
     is_unreadable,
     read_content,
     reset_all,
@@ -49,6 +50,7 @@ from app.schemas import (
     MetadataSuggestion,
     MetadataSuggestRequest,
     ModelOption,
+    OrphanScanRequest,
     PopularQuestion,
     ResetResponse,
     SearchDebugRequest,
@@ -153,6 +155,7 @@ def _meta_from_text(req: AddTextRequest) -> dict:
         "topics": [t.strip() for t in req.topics if t.strip()],
         "summary": (req.summary or "").strip(),
         "related": [r.strip() for r in req.related if r.strip()],
+        "source_group": (req.source_group or "").strip(),
     }
 
 
@@ -483,6 +486,16 @@ def delete_document(doc_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan.")
     return result
+
+
+@app.post("/documents/orphans", response_model=list[DocumentInfo])
+def scan_document_orphans(req: OrphanScanRequest):
+    """Daftar bagian lama (yatim) untuk satu grup sumber Smart Upload.
+
+    Read-only (tidak menghapus). Frontend memakainya untuk menampilkan
+    konfirmasi sebelum menghapus bagian yang judul H2-nya sudah berubah.
+    """
+    return find_orphans(req.source_group, req.keep_filenames)
 
 
 # --------------------- Upload Pintar (auto-split) & Reset ---------------------

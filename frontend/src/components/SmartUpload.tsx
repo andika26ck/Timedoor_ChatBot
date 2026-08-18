@@ -3,10 +3,13 @@ import {
   autoSplitFile,
   autoSplitText,
   createDocumentText,
+  deleteDocument,
   listDocuments,
   predictFilename,
+  scanOrphans,
   type SplitSection,
 } from "../lib/api";
+import type { DocumentInfo } from "../lib/types";
 
 type InputMode = "file" | "text";
 
@@ -33,11 +36,13 @@ export function SmartUpload({
   categories,
   domainOptions,
   onCommitted,
+  onRefresh,
   onError,
 }: {
   categories: string[];
   domainOptions: string[];
   onCommitted: (count: number) => void;
+  onRefresh?: () => void;
   onError: (msg: string) => void;
 }) {
   const [input, setInput] = useState<InputMode>("file");
@@ -52,6 +57,10 @@ export function SmartUpload({
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  const [sourceGroup, setSourceGroup] = useState("");
+  const [orphans, setOrphans] = useState<DocumentInfo[] | null>(null);
+  const [orphanChecked, setOrphanChecked] = useState<Record<string, boolean>>({});
+  const [pruning, setPruning] = useState(false);
 
   function fail(msg: string) {
     setLocalErr(msg);
@@ -78,6 +87,7 @@ export function SmartUpload({
         fail("Tidak ada bagian yang bisa dibuat. Pastikan dokumen punya heading H2 (##).");
         return;
       }
+      setSourceGroup(res.source_name || file?.name || "");
       try {
         const docs = await listDocuments();
         setExistingNames(new Set(docs.map((d) => d.filename)));
@@ -117,6 +127,7 @@ export function SmartUpload({
     setProgress(0);
     let done = 0;
     try {
+      const group = sourceGroup.trim();
       for (const s of chosen) {
         const name = s.filename.trim() || "bagian.md";
         await createDocumentText(
@@ -128,16 +139,34 @@ export function SmartUpload({
             topics: s.topics,
             summary: s.summary,
             related: [],
+            source_group: group,
           },
           s.conflict,
         );
         done += 1;
         setProgress(done);
       }
+      onCommitted(done);
+      // Deteksi bagian lama (yatim) dari grup sumber yang sama, lalu tawarkan
+      // konfirmasi hapus (bersih-bersih Smart Upload).
+      let found: DocumentInfo[] = [];
+      if (group) {
+        const keep = chosen.map((s) =>
+          predictFilename(s.filename.trim() || "bagian.md", s.category),
+        );
+        try {
+          found = await scanOrphans(group, keep);
+        } catch {
+          /* abaikan; deteksi orphan opsional */
+        }
+      }
+      if (found.length) {
+        setOrphans(found);
+        setOrphanChecked(Object.fromEntries(found.map((d) => [d.id, true])));
+      }
       setSections(null);
       setFile(null);
       setText("");
-      onCommitted(done);
     } catch (e) {
       fail(
         (e instanceof Error ? e.message : "Gagal menyimpan dokumen.") +
@@ -148,6 +177,33 @@ export function SmartUpload({
     }
   }
 
+  async function handlePrune() {
+    if (!orphans) return;
+    const ids = orphans.filter((d) => orphanChecked[d.id]).map((d) => d.id);
+    if (!ids.length) {
+      setOrphans(null);
+      return;
+    }
+    setPruning(true);
+    setLocalErr(null);
+    try {
+      for (const id of ids) await deleteDocument(id);
+      setOrphans(null);
+      setOrphanChecked({});
+      onRefresh?.();
+    } catch (e) {
+      fail(e instanceof Error ? e.message : "Gagal menghapus bagian lama.");
+    } finally {
+      setPruning(false);
+    }
+  }
+
+  function skipPrune() {
+    setOrphans(null);
+    setOrphanChecked({});
+  }
+
+  const orphanCount = orphans?.filter((d) => orphanChecked[d.id]).length ?? 0;
   const chosenCount = sections?.filter((s) => s.include).length ?? 0;
 
   return (
@@ -292,6 +348,55 @@ export function SmartUpload({
       )}
 
       {/* Pratinjau hasil pecahan */}
+      {orphans && orphans.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-blush/40 bg-blush-50 p-4 dark:border-blush/30 dark:bg-blush/10">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-blush dark:text-blush-400">
+              🧹 {orphans.length} bagian lama tidak ada lagi di dokumen ini
+            </h4>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={skipPrune}
+                disabled={pruning}
+                className="rounded-lg px-3 py-1.5 text-xs text-jet-700 transition hover:bg-jet-100 disabled:opacity-50 dark:text-brand-100 dark:hover:bg-night-800"
+              >
+                Lewati
+              </button>
+              <button
+                type="button"
+                onClick={handlePrune}
+                disabled={pruning || orphanCount === 0}
+                className="rounded-lg bg-blush px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blush-600 disabled:opacity-50"
+              >
+                {pruning ? "Menghapus..." : `Hapus ${orphanCount} bagian`}
+              </button>
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] text-jet-600 dark:text-brand-200/70">
+            Bagian di bawah berasal dari sumber yang sama tapi judulnya sudah
+            berubah/hilang. Centang yang ingin dihapus dari knowledge base.
+          </p>
+          <div className="mt-2 space-y-1">
+            {orphans.map((d) => (
+              <label
+                key={d.id}
+                className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-jet-700 dark:bg-night-900 dark:text-brand-100"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!orphanChecked[d.id]}
+                  onChange={(e) =>
+                    setOrphanChecked((prev) => ({ ...prev, [d.id]: e.target.checked }))
+                  }
+                />
+                <span className="truncate">{d.display_name || d.filename}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {sections && (
         <div className="mt-4">
           <div className="flex items-center justify-between">
@@ -308,6 +413,21 @@ export function SmartUpload({
                 ? `Menyimpan ${progress}/${chosenCount}...`
                 : `Simpan ${chosenCount} dokumen`}
             </button>
+          </div>
+
+          <div className="mt-3">
+            <label className={LABEL}>Grup sumber (untuk auto-hapus bagian lama)</label>
+            <input
+              value={sourceGroup}
+              onChange={(e) => setSourceGroup(e.target.value)}
+              placeholder="mis. Guideline Curriculum Maker.docx"
+              className={FIELD}
+            />
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-brand-200/60">
+              Bagian dari sumber yang sama dikelompokkan. Saat kamu unggah ulang
+              sumber ini dan judul H2 berubah, bagian lama bisa dihapus (dengan
+              konfirmasi).
+            </p>
           </div>
 
           <div className="mt-3 space-y-2">

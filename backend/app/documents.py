@@ -265,6 +265,13 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         if existing
         else now
     )
+    # source_group: penanda asal dokumen (Smart Upload). Kalau tidak dikirim saat
+    # update, pertahankan nilai lama supaya deteksi orphan tetap konsisten.
+    source_group = (
+        meta.get("source_group")
+        or (existing.get("source_group") if existing else "")
+        or ""
+    )
     entry = {
         "id": existing["id"] if existing else uuid.uuid4().hex,
         "chunking": {"max_tokens": max_tokens, "overlap": overlap},
@@ -280,8 +287,30 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         "related": meta.get("related") or [],
         "created_at": created_at,
         "uploaded_at": now,
+        "source_group": source_group,
     }
     return registry.add_doc(entry)
+
+
+def find_orphans(source_group: str, keep_filenames: list[str]) -> list[dict]:
+    """Bagian lama (yatim) untuk satu grup sumber Smart Upload.
+
+    Kembalikan entri registry yang punya `source_group` sama TAPI nama filenya
+    tidak ada di `keep_filenames` (mis. section yang judul H2-nya diganti saat
+    dokumen sumber diunggah ulang). Read-only: TIDAK menghapus apa pun.
+    """
+    group = (source_group or "").strip()
+    if not group:
+        return []
+    keep = {f for f in (keep_filenames or []) if f}
+    orphans: list[dict] = []
+    for doc in registry.list_docs():
+        if (doc.get("source_group") or "").strip() != group:
+            continue
+        if doc.get("filename") in keep:
+            continue
+        orphans.append(doc)
+    return orphans
 
 
 def add_text(

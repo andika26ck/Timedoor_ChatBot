@@ -329,6 +329,7 @@ function metaForm(file: File, meta?: DocumentMeta): FormData {
   form.append("topics", (meta?.topics ?? []).join(", "));
   form.append("summary", meta?.summary ?? "");
   form.append("related", (meta?.related ?? []).join(", "));
+  form.append("source_group", meta?.source_group ?? "");
   return form;
 }
 
@@ -339,6 +340,7 @@ function metaBody(meta?: DocumentMeta) {
     topics: meta?.topics ?? [],
     summary: meta?.summary ?? "",
     related: meta?.related ?? [],
+    source_group: meta?.source_group ?? "",
   };
 }
 
@@ -406,6 +408,21 @@ export async function updateDocumentText(
 export async function deleteDocument(id: string): Promise<void> {
   if (USE_MOCK) return mock.remove(id);
   return reqVoid(`/documents/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Cari bagian lama (yatim) untuk satu grup sumber Smart Upload.
+ * `keepFilenames` = nama file final bagian yang baru saja disimpan.
+ */
+export async function scanOrphans(
+  sourceGroup: string,
+  keepFilenames: string[],
+): Promise<DocumentInfo[]> {
+  if (USE_MOCK) return mock.scanOrphans(sourceGroup, keepFilenames);
+  return req<DocumentInfo[]>(
+    "/documents/orphans",
+    json("POST", { source_group: sourceGroup, keep_filenames: keepFilenames }),
+  );
 }
 
 /* --------------------------- Upload Pintar (auto-split) --------------------------- */

@@ -53,6 +53,8 @@ export interface DocumentMeta {
   topics?: string[];
   summary?: string;
   related?: string[];
+  /** Grup sumber (Smart Upload) untuk fitur auto-hapus bagian lama. */
+  source_group?: string;
 }
 
 export interface DocumentInfo {
@@ -63,6 +65,8 @@ export interface DocumentInfo {
   uploaded_at: string;
   /** Timestamp upload pertama; dipertahankan lintas update. Kosong untuk entri lama. */
   created_at?: string;
+  /** Grup sumber (Smart Upload); dipakai fitur auto-hapus bagian lama. */
+  source_group?: string;
   category: string;
   domain: string;
   topics: string[];
