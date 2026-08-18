@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChatLogsPanel } from "./components/ChatLogsPanel";
 import { DocumentsPanel } from "./components/DocumentsPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import StatusBadge from "./components/StatusBadge";
@@ -8,12 +9,13 @@ import { ThemeToggle } from "./components/ui/ThemeToggle";
 import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
 
-type View = "chat" | "docs" | "settings";
+type View = "chat" | "logs" | "docs" | "settings";
 
 const TITLES: Record<View, string> = {
-  chat: "Chat",
-  docs: "Upload Dokumen",
-  settings: "System Prompt",
+  chat: "Chat (uji coba)",
+  logs: "Riwayat Pengguna",
+  docs: "Kelola Dokumen",
+  settings: "Kelola DB",
 };
 
 export default function App() {
@@ -65,13 +67,19 @@ export default function App() {
             onClick={() => setView("chat")}
           />
           <NavItem
+            label="Riwayat"
+            icon="🕒"
+            active={view === "logs"}
+            onClick={() => setView("logs")}
+          />
+          <NavItem
             label="Dokumen"
             icon="📄"
             active={view === "docs"}
             onClick={() => setView("docs")}
           />
           <NavItem
-            label="System Prompt"
+            label="Kelola DB"
             icon="⚙️"
             active={view === "settings"}
             onClick={() => setView("settings")}
@@ -95,7 +103,10 @@ export default function App() {
 
         <div className="min-h-0 flex-1">
           <div className={view === "chat" ? "h-full" : "hidden"}>
-            <ChatPanel active={view === "chat"} showFilter withHistory multiTurn />
+            <ChatPanel active={view === "chat"} showFilter multiTurn />
+          </div>
+          <div className={view === "logs" ? "h-full" : "hidden"}>
+            <ChatLogsPanel />
           </div>
           <div className={view === "docs" ? "h-full" : "hidden"}>
             <DocumentsPanel />

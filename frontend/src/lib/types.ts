@@ -152,3 +152,22 @@ export interface HealthInfo {
   model: string;
   store_configured: boolean;
 }
+
+/** Ringkasan satu sesi percakapan (Riwayat Pengguna, sisi admin). */
+export interface ChatSessionSummary {
+  session_id: string;
+  messages: number;
+  questions: number;
+  first_at: string;
+  last_at: string;
+  first_question: string;
+}
+
+/** Satu pesan dalam log percakapan (detail sesi, sisi admin). */
+export interface ChatLogMessage {
+  role: "user" | "assistant";
+  text: string;
+  domain?: string;
+  topic?: string;
+  created_at: string;
+}

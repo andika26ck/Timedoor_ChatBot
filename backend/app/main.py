@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app import (
     autosplit,
+    chatlog,
     classify,
     models_catalog,
     registry,
@@ -41,6 +42,8 @@ from app.schemas import (
     AskResponse,
     AutoSplitResponse,
     AutoSplitTextRequest,
+    ChatLogMessage,
+    ChatSessionSummary,
     DocumentContent,
     DocumentInfo,
     MetadataSuggestion,
@@ -167,6 +170,18 @@ def _history_payload(req: AskRequest) -> list[dict]:
     return out
 
 
+def _log_chat(req: AskRequest, question: str, answer: str) -> None:
+    """Catat percakapan ke log (best-effort) untuk tracking sisi admin.
+
+    Identitas anonim: hanya session_id (dari frontend) + waktu. Kegagalan
+    pencatatan tidak boleh mengganggu jawaban ke user.
+    """
+    sid = (req.session_id or "").strip()
+    chatlog.log_message(sid, "user", question, req.domain, req.topic)
+    if (answer or "").strip():
+        chatlog.log_message(sid, "assistant", answer, req.domain, req.topic)
+
+
 @app.get("/")
 def root():
     return {"service": "Timedoor FAQ Bot API", "docs": "/docs"}
@@ -234,6 +249,12 @@ def ask_endpoint(req: AskRequest):
         raise _http_error(exc) from exc
     # catat frekuensi hanya kalau berhasil, untuk pertanyaan populer dinamis
     stats_store.record_question(question)
+    answer_text = (
+        result.get("answer", "")
+        if isinstance(result, dict)
+        else getattr(result, "answer", "")
+    )
+    _log_chat(req, question, answer_text or "")
     return result
 
 
@@ -261,8 +282,13 @@ def ask_stream_endpoint(req: AskRequest):
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     def event_source():
+        answer_parts: list[str] = []
         try:
             for event in ask_stream(question, req.domain, req.topic, history=history):
+                if isinstance(event, dict) and event.get("type") == "text":
+                    value = event.get("value")
+                    if isinstance(value, str):
+                        answer_parts.append(value)
                 yield sse(event)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Gagal memproses pertanyaan (stream)")
@@ -271,6 +297,7 @@ def ask_stream_endpoint(req: AskRequest):
             return
         # catat frekuensi hanya kalau seluruh stream berhasil
         stats_store.record_question(question)
+        _log_chat(req, question, "".join(answer_parts))
         yield sse({"type": "done"})
 
     return StreamingResponse(
@@ -281,6 +308,37 @@ def ask_stream_endpoint(req: AskRequest):
             "X-Accel-Buffering": "no",  # cegah buffering proxy
         },
     )
+
+
+# ----------------------- Riwayat Pengguna (admin) -----------------------
+
+
+@app.get("/admin/chat-logs/sessions", response_model=list[ChatSessionSummary])
+def admin_chat_sessions(
+    limit: int = 100,
+    offset: int = 0,
+    since: str | None = None,
+    until: str | None = None,
+):
+    """Ringkasan per sesi (anonim) untuk tabel Riwayat Pengguna di dashboard."""
+    try:
+        return chatlog.list_sessions(limit=limit, offset=offset, since=since, until=until)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal memuat daftar sesi chat")
+        raise _http_error(exc) from exc
+
+
+@app.get(
+    "/admin/chat-logs/sessions/{session_id}",
+    response_model=list[ChatLogMessage],
+)
+def admin_chat_session_detail(session_id: str):
+    """Semua pesan dalam satu sesi, urut waktu."""
+    try:
+        return chatlog.get_session(session_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal memuat detail sesi chat")
+        raise _http_error(exc) from exc
 
 
 # --------------------------- Saran metadata (AI) ---------------------------

@@ -10,6 +10,8 @@ import type {
   AskResponse,
   AutoSplitResult,
   ChatHistoryTurn,
+  ChatLogMessage,
+  ChatSessionSummary,
   DocumentContent,
   DocumentInfo,
   DocumentMeta,
@@ -27,6 +29,8 @@ export type {
   AskResponse,
   AutoSplitResult,
   ChatHistoryTurn,
+  ChatLogMessage,
+  ChatSessionSummary,
   Citation,
   DocumentContent,
   DocumentInfo,
@@ -50,6 +54,28 @@ const RUNTIME_API_URL =
     : undefined;
 const API_URL = RUNTIME_API_URL ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
+
+/**
+ * ID sesi anonim per-browser. Dikirim bersama tiap pertanyaan agar admin bisa
+ * mengelompokkan percakapan di halaman Riwayat Pengguna. Tidak ada data
+ * pribadi — hanya penanda acak yang disimpan di localStorage.
+ */
+const SESSION_KEY = "tdc:session-id";
+function getSessionId(): string {
+  if (typeof window === "undefined") return "anon";
+  try {
+    let sid = window.localStorage.getItem(SESSION_KEY);
+    if (!sid) {
+      sid =
+        (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+        `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      window.localStorage.setItem(SESSION_KEY, sid);
+    }
+    return sid;
+  } catch {
+    return "anon";
+  }
+}
 
 /**
  * Fallback kalau endpoint /taxonomy tidak terjangkau.
@@ -116,7 +142,11 @@ export async function askQuestion(
   if (USE_MOCK) return mock.answer(question);
   return req<AskResponse>(
     "/ask",
-    json("POST", { question, domain: domain || null, topic: topic || null }, signal),
+    json(
+      "POST",
+      { question, domain: domain || null, topic: topic || null, session_id: getSessionId() },
+      signal,
+    ),
   );
 }
 
@@ -157,6 +187,7 @@ export async function askQuestionStream(
       domain: domain || null,
       topic: topic || null,
       history: history ?? [],
+      session_id: getSessionId(),
     }),
     signal,
   });
@@ -439,4 +470,29 @@ export async function updateSettings(patch: SettingsPatch): Promise<SettingsInfo
 export async function listModels(refresh = false): Promise<ModelOption[]> {
   if (USE_MOCK) return mock.listModels();
   return req<ModelOption[]>(`/models${refresh ? "?refresh=true" : ""}`);
+}
+
+/* --------------------------- Riwayat Pengguna (admin) --------------------------- */
+
+/** Ringkasan sesi percakapan (anonim) untuk tabel Riwayat Pengguna. */
+export async function getChatSessions(params?: {
+  limit?: number;
+  offset?: number;
+  since?: string;
+  until?: string;
+}): Promise<ChatSessionSummary[]> {
+  if (USE_MOCK) return [];
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.since) q.set("since", params.since);
+  if (params?.until) q.set("until", params.until);
+  const qs = q.toString();
+  return req<ChatSessionSummary[]>(`/admin/chat-logs/sessions${qs ? `?${qs}` : ""}`);
+}
+
+/** Semua pesan dalam satu sesi, urut waktu. */
+export async function getChatSession(sessionId: string): Promise<ChatLogMessage[]> {
+  if (USE_MOCK) return [];
+  return req<ChatLogMessage[]>(`/admin/chat-logs/sessions/${encodeURIComponent(sessionId)}`);
 }

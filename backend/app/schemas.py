@@ -21,6 +21,9 @@ class AskRequest(BaseModel):
     # Multi-turn: beberapa giliran terakhir percakapan (opsional). Kosong =
     # pertanyaan berdiri sendiri, sama seperti perilaku lama.
     history: list[ChatTurn] = []
+    # ID sesi anonim (dibuat di browser). Dipakai untuk mengelompokkan log
+    # percakapan pada tracking sisi admin. Kosong/None = tidak dikelompokkan.
+    session_id: str | None = None
 
 
 class Citation(BaseModel):
@@ -41,6 +44,27 @@ class AskResponse(BaseModel):
     answer: str
     citations: list[Citation] = []
     related_docs: list[RelatedDoc] = []
+
+
+class ChatLogMessage(BaseModel):
+    """Satu giliran percakapan yang tercatat (detail sesi, sisi admin)."""
+
+    role: str = "user"
+    text: str = ""
+    domain: str = ""
+    topic: str = ""
+    created_at: str = ""
+
+
+class ChatSessionSummary(BaseModel):
+    """Ringkasan satu sesi anonim untuk tabel Riwayat Pengguna."""
+
+    session_id: str
+    messages: int = 0
+    questions: int = 0
+    first_at: str = ""
+    last_at: str = ""
+    first_question: str = ""
 
 
 class FeedbackRequest(BaseModel):

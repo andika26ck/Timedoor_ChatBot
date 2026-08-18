@@ -6,8 +6,7 @@ import {
   sendFeedback,
 } from "../../../lib/api";
 import type { ChatHistoryTurn } from "../../../lib/types";
-import type { ChatMessage, Conversation, FeedbackValue } from "../types";
-import { useLocalStorage } from "./useLocalStorage";
+import type { ChatMessage, FeedbackValue } from "../types";
 
 function jamSekarang(): string {
   return new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -15,56 +14,26 @@ function jamSekarang(): string {
 
 const MAX_SUGGESTIONS = 3;
 const DEFAULT_HISTORY_WINDOW = 6;
-const DEFAULT_STORAGE_KEY = "cobee.conversations.v1";
 
 export interface UseChatOptions {
-  /** Simpan & kelola banyak percakapan di localStorage (sidebar Riwayat). */
-  persist?: boolean;
-  /** Kunci localStorage untuk daftar percakapan. */
-  storageKey?: string;
   /** Kirim beberapa giliran terakhir ke backend agar bot mengingat konteks. */
   multiTurn?: boolean;
   /** Jumlah pesan terakhir yang dikirim sebagai konteks (default 6). */
   historyWindow?: number;
 }
 
-function judulDari(messages: ChatMessage[]): string {
-  const firstUser = messages.find((m) => m.role === "user" && m.text.trim());
-  const raw = firstUser?.text.trim();
-  if (!raw) return "Percakapan baru";
-  return raw.length > 48 ? `${raw.slice(0, 48)}\u2026` : raw;
-}
-
-function buatPercakapan(): Conversation {
-  const now = Date.now();
-  return {
-    id: crypto.randomUUID(),
-    title: "Percakapan baru",
-    messages: [],
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
 /**
- * Seluruh state & aksi percakapan chat, dipisah dari UI agar bisa dipakai
- * ulang di panel dashboard maupun di floating widget.
+ * Seluruh state & aksi percakapan chat, dipisah dari UI agar bisa dipakai ulang
+ * di halaman end-user, panel dashboard admin, maupun floating widget.
  *
- * Opsi:
- *  - persist  : aktifkan riwayat multi-percakapan tersimpan di localStorage.
- *  - multiTurn: kirim beberapa giliran terakhir ke backend (bot "mengingat").
- * Tanpa opsi, perilakunya sama persis seperti versi sebelumnya (dipakai widget).
+ * multiTurn = true membuat beberapa giliran terakhir dikirim ke backend supaya
+ * bot "mengingat" konteks. Tanpa opsi, perilakunya sama seperti versi awal.
+ *
+ * Catatan: session_id (untuk tracking sisi admin) ditangani otomatis di lib/api
+ * dan tidak perlu diurus di sini.
  */
 export function useChat(active: boolean, options: UseChatOptions = {}) {
-  const {
-    persist = false,
-    storageKey = DEFAULT_STORAGE_KEY,
-    multiTurn = false,
-    historyWindow = DEFAULT_HISTORY_WINDOW,
-  } = options;
-
-  const [conversations, setConversations] = useLocalStorage<Conversation[]>(storageKey, []);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const { multiTurn = false, historyWindow = DEFAULT_HISTORY_WINDOW } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -79,71 +48,12 @@ export function useChat(active: boolean, options: UseChatOptions = {}) {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // Ref agar submitQuestion & aksi lain selalu membaca nilai terbaru tanpa
+  // Ref agar submitQuestion & aksi lain selalu membaca pesan terbaru tanpa
   // memaksa dependensi useCallback berubah tiap render.
   const messagesRef = useRef<ChatMessage[]>(messages);
-  const conversationsRef = useRef<Conversation[]>(conversations);
-  const activeIdRef = useRef<string | null>(activeId);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-  useEffect(() => {
-    conversationsRef.current = conversations;
-  }, [conversations]);
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  }, [activeId]);
-
-  // Inisialisasi percakapan aktif (sekali) saat mode persist aktif.
-  const initedRef = useRef(false);
-  useEffect(() => {
-    if (!persist || initedRef.current) return;
-    initedRef.current = true;
-    if (conversations.length > 0) {
-      const latest = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      setActiveId(latest.id);
-      setMessages(latest.messages);
-    } else {
-      const conv = buatPercakapan();
-      setConversations([conv]);
-      setActiveId(conv.id);
-      setMessages([]);
-    }
-  }, [persist, conversations, setConversations]);
-
-  // Simpan balik pesan ke percakapan aktif (debounce ringan supaya streaming
-  // tidak menulis localStorage tiap token).
-  useEffect(() => {
-    if (!persist || !activeId) return;
-    const id = activeId;
-    const snapshot = messages;
-    const t = setTimeout(() => {
-      setConversations((prev) => {
-        let found = false;
-        const next = prev.map((c) => {
-          if (c.id !== id) return c;
-          found = true;
-          return {
-            ...c,
-            messages: snapshot,
-            title: judulDari(snapshot),
-            updatedAt: Date.now(),
-          };
-        });
-        if (!found) {
-          next.unshift({
-            id,
-            title: judulDari(snapshot),
-            messages: snapshot,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-        }
-        return next;
-      });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [messages, persist, activeId, setConversations]);
 
   // Taksonomi: domain + peta topik per domain.
   useEffect(() => {
@@ -306,69 +216,11 @@ export function useChat(active: boolean, options: UseChatOptions = {}) {
   );
 
   const clear = useCallback(() => {
+    abortRef.current?.abort();
     setMessages([]);
+    setInput("");
     setError(null);
   }, []);
-
-  // ------------------------- Aksi percakapan (persist) -------------------------
-  const newConversation = useCallback(() => {
-    abortRef.current?.abort();
-    setError(null);
-    setInput("");
-    if (!persist) {
-      setMessages([]);
-      return;
-    }
-    const conv = buatPercakapan();
-    setConversations((prev) => [conv, ...prev]);
-    setActiveId(conv.id);
-    setMessages([]);
-  }, [persist, setConversations]);
-
-  const selectConversation = useCallback(
-    (id: string) => {
-      if (!persist || id === activeIdRef.current) return;
-      const conv = conversationsRef.current.find((c) => c.id === id);
-      if (!conv) return;
-      abortRef.current?.abort();
-      setError(null);
-      setInput("");
-      setActiveId(id);
-      setMessages(conv.messages);
-    },
-    [persist],
-  );
-
-  const renameConversation = useCallback(
-    (id: string, title: string) => {
-      const t = title.trim();
-      if (!t) return;
-      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: t } : c)));
-    },
-    [setConversations],
-  );
-
-  const deleteConversation = useCallback(
-    (id: string) => {
-      const prev = conversationsRef.current;
-      let next = prev.filter((c) => c.id !== id);
-      if (activeIdRef.current === id) {
-        abortRef.current?.abort();
-        if (next.length === 0) {
-          const conv = buatPercakapan();
-          next = [conv];
-          setActiveId(conv.id);
-          setMessages([]);
-        } else {
-          const latest = [...next].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-          setActiveId(latest.id);
-          setMessages(latest.messages);
-        }
-      }
-      setConversations(next);
-    },
-    [setConversations],
-  );
 
   return {
     messages,
@@ -389,14 +241,6 @@ export function useChat(active: boolean, options: UseChatOptions = {}) {
     stop,
     giveFeedback,
     clear,
-    // Riwayat percakapan (aktif hanya saat persist).
-    persistEnabled: persist,
-    conversations,
-    activeId,
-    newConversation,
-    selectConversation,
-    renameConversation,
-    deleteConversation,
   };
 }
 
