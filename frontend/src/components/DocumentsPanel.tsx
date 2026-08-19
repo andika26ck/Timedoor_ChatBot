@@ -629,8 +629,14 @@ export function DocumentsPanel() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(d);
     }
-    const order = [...domainOptions, UNGROUPED];
-    return [...map.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+    // Urutkan GRUP mengikuti dokumen paling relevan di dalamnya (sesuai sort
+    // tanggal), supaya upload terbaru tidak "tenggelam" di grup domain yang
+    // posisinya di bawah (mis. domain kosong = "Tanpa domain").
+    return [...map.entries()].sort((a, b) => {
+      const av = keyOf(a[1][0]);
+      const bv = keyOf(b[1][0]);
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
   }, [docs, domainOptions, sortBy, groupFilter]);
 
   return (
