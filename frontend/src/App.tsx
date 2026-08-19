@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { DocumentsPanel } from "./components/DocumentsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { SearchTestPanel } from "./components/SearchTestPanel";
@@ -14,7 +14,7 @@ import { useAuth } from "./features/auth/AuthGate";
 type View = "chat" | "search" | "logs" | "docs" | "settings";
 
 const TITLES: Record<View, string> = {
-  chat: "Chat (uji coba)",
+  chat: "Chat",
   search: "Uji Pencarian",
   logs: "Riwayat & Log Aktivitas",
   docs: "Kelola Dokumen",
@@ -87,31 +87,31 @@ export default function App() {
         <nav className="space-y-1 px-3 pb-3">
           <NavItem
             label="Chat"
-            icon="💬"
+            icon={<ChatIcon />}
             active={view === "chat"}
             onClick={() => go("chat")}
           />
           <NavItem
             label="Uji Pencarian"
-            icon="🔎"
+            icon={<SearchIcon />}
             active={view === "search"}
             onClick={() => go("search")}
           />
           <NavItem
             label="Riwayat & Log"
-            icon="🕒"
+            icon={<HistoryIcon />}
             active={view === "logs"}
             onClick={() => go("logs")}
           />
           <NavItem
             label="Dokumen"
-            icon="📄"
+            icon={<DocIcon />}
             active={view === "docs"}
             onClick={() => go("docs")}
           />
           <NavItem
             label="System Prompt"
-            icon="⚙️"
+            icon={<PromptIcon />}
             active={view === "settings"}
             onClick={() => go("settings")}
           />
@@ -202,7 +202,7 @@ function NavItem({
   onClick,
 }: {
   label: string;
-  icon: string;
+  icon: ReactNode;
   active: boolean;
   onClick: () => void;
 }) {
@@ -217,8 +217,57 @@ function NavItem({
           : "text-jet-700 hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-night-800")
       }
     >
-      <span className="text-base">{icon}</span>
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       {label}
     </button>
+  );
+}
+
+/* Ikon menu — bentuk abstrak & berwarna (bukan ikon garis generik). */
+function ChatIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fb7185" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="5" transform="rotate(45 12 12)" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9.5" cy="12" r="6" fill="#38bdf8" />
+      <circle cx="15" cy="12" r="6" fill="#38bdf8" fillOpacity="0.55" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#a78bfa" aria-hidden="true">
+      <g transform="rotate(-15 12 12)">
+        <rect x="4" y="6" width="16" height="3" rx="1.5" />
+        <rect x="4" y="11" width="16" height="3" rx="1.5" fillOpacity="0.8" />
+        <rect x="4" y="16" width="16" height="3" rx="1.5" fillOpacity="0.6" />
+      </g>
+    </svg>
+  );
+}
+
+function DocIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fbbf24" aria-hidden="true">
+      <polygon points="12,2.5 20.5,7.25 20.5,16.75 12,21.5 3.5,16.75 3.5,7.25" />
+    </svg>
+  );
+}
+
+function PromptIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fb923c" aria-hidden="true">
+      <circle cx="12" cy="6.5" r="4.3" />
+      <circle cx="12" cy="17.5" r="4.3" />
+      <circle cx="6.5" cy="12" r="4.3" />
+      <circle cx="17.5" cy="12" r="4.3" />
+    </svg>
   );
 }
