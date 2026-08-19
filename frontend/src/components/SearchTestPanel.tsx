@@ -70,7 +70,7 @@ function HitCard({ hit }: { hit: SearchHit }) {
             <span className="truncate font-medium text-jet-700 dark:text-brand-100">{hit.source}</span>
             {hit.chunk_index !== null && (
               <span className="text-xs text-slate-400 dark:text-brand-200/60">
-                \u00b7 chunk #{hit.chunk_index}
+                · chunk #{hit.chunk_index}
               </span>
             )}
           </div>
@@ -88,7 +88,7 @@ function HitCard({ hit }: { hit: SearchHit }) {
 
           {/* Metadata */}
           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-            {hit.domain && <Chip>\ud83c\udff7\ufe0f {hit.domain}</Chip>}
+            {hit.domain && <Chip>{hit.domain}</Chip>}
             {hit.category && <Chip>{hit.category}</Chip>}
             {hit.topics.map((t) => (
               <Chip key={t}>#{t}</Chip>
@@ -202,7 +202,7 @@ export function SearchTestPanel() {
               }
             }}
             rows={2}
-            placeholder='Ketik pertanyaan untuk diuji, mis. "Bagaimana cara Set to Paid invoice?" (Ctrl/\u2318+Enter untuk menjalankan)'
+            placeholder='Ketik pertanyaan untuk diuji, mis. "Bagaimana cara Set to Paid invoice?" (Ctrl/Cmd+Enter untuk menjalankan)'
             className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-jet-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none dark:border-night-600 dark:bg-night-900 dark:text-brand-100 dark:placeholder:text-brand-200/40"
           />
 
@@ -275,18 +275,18 @@ export function SearchTestPanel() {
               <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                 {result.rewritten && (
                   <p>
-                    Pertanyaan ditulis ulang untuk pencarian: \u201c<b>{result.search_query}</b>\u201d.
+                    Pertanyaan ditulis ulang untuk pencarian: “<b>{result.search_query}</b>”.
                   </p>
                 )}
                 {result.filters.domain_fallback && (
                   <p>
-                    Filter domain \u201c{result.filters.domain}\u201d tidak menghasilkan chunk \u2014 ditampilkan
+                    Filter domain “{result.filters.domain}” tidak menghasilkan chunk — ditampilkan
                     tanpa filter domain (fallback).
                   </p>
                 )}
                 {result.filters.topic_fallback && (
                   <p>
-                    Filter topik \u201c{result.filters.topic}\u201d tidak menghasilkan chunk \u2014 ditampilkan
+                    Filter topik “{result.filters.topic}” tidak menghasilkan chunk — ditampilkan
                     tanpa filter topik (fallback).
                   </p>
                 )}

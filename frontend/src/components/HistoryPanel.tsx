@@ -24,13 +24,13 @@ export function HistoryPanel() {
           <TabButton
             active={tab === "chats"}
             onClick={() => setTab("chats")}
-            icon="\uD83D\uDD52"
+            icon="🕒"
             label="Percakapan Pengguna"
           />
           <TabButton
             active={tab === "audit"}
             onClick={() => setTab("audit")}
-            icon="\uD83D\uDCDC"
+            icon="📜"
             label="Aktivitas Admin"
           />
         </div>
