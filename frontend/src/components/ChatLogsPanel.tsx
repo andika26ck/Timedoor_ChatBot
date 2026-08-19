@@ -40,11 +40,11 @@ function SessionModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-jet-900/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-jet-900/50 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700"
+        className="flex h-full w-full flex-col bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700 sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-night-700">
@@ -184,7 +184,8 @@ export function ChatLogsPanel() {
               Belum ada percakapan tercatat. Coba ajukan pertanyaan lewat halaman chat end-user.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400 dark:border-night-700 dark:text-brand-200/60">
                   <tr>
@@ -226,6 +227,31 @@ export function ChatLogsPanel() {
                 </tbody>
               </table>
             </div>
+
+            <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
+              {sessions.map((s) => (
+                <li key={s.session_id} className="space-y-2 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
+                      {s.first_question || "-"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void openSession(s.session_id)}
+                      className={`${GHOST_BTN} shrink-0`}
+                    >
+                      Lihat
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
+                    <span className="font-mono">{shortId(s.session_id)}</span>
+                    <span>· {s.questions} tanya</span>
+                    <span>· {fmt(s.last_at)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </div>
       </div>

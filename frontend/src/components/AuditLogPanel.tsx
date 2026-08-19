@@ -163,7 +163,8 @@ export function AuditLogPanel() {
               Belum ada aktivitas tercatat. Coba upload atau ubah sebuah dokumen.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400 dark:border-night-700 dark:text-brand-200/60">
                   <tr>
@@ -208,6 +209,39 @@ export function AuditLogPanel() {
                 </tbody>
               </table>
             </div>
+
+            <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
+              {shown.map((ev) => {
+                const meta = actionMeta(ev.action);
+                const details = describeDetails(ev);
+                return (
+                  <li key={ev.id} className="space-y-1.5 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}
+                      >
+                        {meta.label}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-slate-400 dark:text-brand-200/60">
+                        {fmt(ev.ts)}
+                      </span>
+                    </div>
+                    {ev.target && (
+                      <div className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
+                        {ev.target}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-400 dark:text-brand-200/60">
+                      <span className="font-medium text-slate-500 dark:text-brand-200/80">
+                        {ev.username || "—"}
+                      </span>
+                      {details !== "—" && <span>· {details}</span>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </div>
       </div>

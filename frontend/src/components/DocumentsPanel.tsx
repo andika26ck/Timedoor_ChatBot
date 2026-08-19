@@ -114,11 +114,11 @@ function DetailModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-jet-900/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-jet-900/50 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700"
+        className="flex h-full w-full flex-col bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700 sm:h-auto sm:max-h-[80vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-night-700">
@@ -254,11 +254,11 @@ function EditModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-jet-900/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-jet-900/50 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700"
+        className="flex h-full w-full flex-col bg-white shadow-xl dark:bg-night-900 dark:ring-1 dark:ring-night-700 sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-night-700">
