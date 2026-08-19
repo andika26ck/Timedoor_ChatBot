@@ -19,7 +19,7 @@ const TITLES: Record<View, string> = {
   search: "Uji Pencarian",
   logs: "Riwayat Pengguna",
   docs: "Kelola Dokumen",
-  settings: "Kelola DB",
+  settings: "System Prompt",
   audit: "Log Aktivitas",
 };
 
@@ -91,7 +91,7 @@ export default function App() {
             onClick={() => setView("docs")}
           />
           <NavItem
-            label="Kelola DB"
+            label="System Prompt"
             icon="⚙️"
             active={view === "settings"}
             onClick={() => setView("settings")}

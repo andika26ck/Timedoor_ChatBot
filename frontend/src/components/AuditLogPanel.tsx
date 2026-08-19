@@ -41,7 +41,7 @@ const ACTIONS: Record<string, ActionMeta> = {
     cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700",
   },
   "settings.update": {
-    label: "Ubah setelan (Kelola DB)",
+    label: "Ubah setelan (System Prompt)",
     icon: "\u2699\uFE0F",
     cls: "bg-jet-100 text-jet-700 border-slate-200 dark:bg-night-800 dark:text-brand-100/80 dark:border-night-600",
   },
@@ -120,7 +120,7 @@ export function AuditLogPanel() {
             <h2 className="text-base font-semibold text-navy dark:text-jet-100">Log Aktivitas</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
               Jejak siapa yang mengubah knowledge base: upload, perbarui, atau hapus dokumen, reset
-              KB, dan perubahan setelan di Kelola DB. Terbaru ditampilkan paling atas.
+              KB, dan perubahan setelan di System Prompt. Terbaru ditampilkan paling atas.
             </p>
           </div>
           <button type="button" onClick={() => void load()} className={GHOST_BTN}>

@@ -833,7 +833,7 @@ def update_settings_endpoint(req: SettingsUpdate, request: Request):
     audit.record(
         _actor(request),
         "settings.update",
-        target="Kelola DB",
+        target="System Prompt",
         details={"changed": changed},
     )
     return result
