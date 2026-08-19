@@ -6,6 +6,7 @@
  * dialihkan ke data palsu di ./mock supaya UI bisa dites tanpa backend.
  */
 import * as mock from "./mock";
+import { clearToken, getToken, setToken } from "./auth";
 import type {
   AskResponse,
   AutoSplitResult,
@@ -108,14 +109,43 @@ async function readError(res: Response): Promise<string> {
   return `Gagal menghubungi server (${res.status})`;
 }
 
+/** Sisipkan header Authorization bila ada token admin tersimpan. */
+function withAuth(init?: RequestInit): RequestInit {
+  const token = getToken();
+  if (!token) return init ?? {};
+  return {
+    ...init,
+    headers: {
+      ...(init?.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${token}`,
+    },
+  };
+}
+
+/** Token ditolak server (401): bersihkan sesi & minta UI login ulang. */
+function handleUnauthorized(): void {
+  clearToken();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("tdc:unauthorized"));
+  }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, init);
+  const res = await fetch(`${API_URL}${path}`, withAuth(init));
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error(await readError(res));
+  }
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as T;
 }
 
 async function reqVoid(path: string, init?: RequestInit): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, init);
+  const res = await fetch(`${API_URL}${path}`, withAuth(init));
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error(await readError(res));
+  }
   if (!res.ok) throw new Error(await readError(res));
 }
 
@@ -126,6 +156,34 @@ function json(method: string, body: unknown, signal?: AbortSignal): RequestInit 
     body: JSON.stringify(body),
     signal,
   };
+}
+
+/* ------------------------------ Autentikasi (admin) ------------------------------ */
+
+export interface AdminUser {
+  username: string;
+  role: string;
+  created_at?: string | null;
+}
+
+/** Login admin: simpan token bila berhasil, kembalikan info user. */
+export async function login(username: string, password: string): Promise<AdminUser> {
+  const res = await fetch(`${API_URL}/auth/login`, json("POST", { username, password }));
+  if (!res.ok) throw new Error(await readError(res));
+  const data = (await res.json()) as { access_token: string; user: AdminUser };
+  setToken(data.access_token);
+  return data.user;
+}
+
+/** Verifikasi token saat ini & ambil user aktif. */
+export async function fetchMe(): Promise<AdminUser> {
+  const data = await req<{ user: AdminUser }>("/auth/me");
+  return data.user;
+}
+
+/** Hapus token lokal (keluar). */
+export function logout(): void {
+  clearToken();
 }
 
 /* ------------------------------ Health ------------------------------ */

@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     chunk_max_tokens: int = 0
     chunk_overlap_tokens: int = 0
 
+    # --- Autentikasi panel admin ---
+    # Kunci rahasia untuk menandatangani token login (HS256). WAJIB diisi
+    # dengan string acak & dirahasiakan di produksi. Kalau kosong, dipakai
+    # secret dev yang TIDAK aman (hanya untuk pengembangan lokal).
+    auth_jwt_secret: str = ""
+    # Masa berlaku token login (menit). Default 12 jam.
+    auth_token_expire_minutes: int = 720
+    # Seed admin pertama (opsional): kalau tabel akun masih kosong saat start,
+    # akun ini dibuat otomatis. Berguna untuk bootstrap di produksi.
+    auth_seed_admin_username: str = ""
+    auth_seed_admin_password: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

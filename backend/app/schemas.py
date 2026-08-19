@@ -316,3 +316,27 @@ class SettingsUpdate(BaseModel):
     # 0 (atau negatif) = reset ke default Google.
     chunk_max_tokens: int | None = None
     chunk_overlap_tokens: int | None = None
+
+
+# --------------------------- Autentikasi (admin) ---------------------------
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserInfo(BaseModel):
+    username: str
+    role: str = "admin"
+    created_at: str | None = None
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserInfo
+
+
+class MeResponse(BaseModel):
+    user: UserInfo

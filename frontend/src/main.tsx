@@ -4,6 +4,7 @@ import App from "./App";
 import EndUserApp from "./EndUserApp";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider } from "./components/ui/Toast";
+import { AuthGate } from "./features/auth/AuthGate";
 import "./index.css";
 
 /*
@@ -16,13 +17,18 @@ import "./index.css";
  */
 const isAdmin =
   typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
-const Root = isAdmin ? App : EndUserApp;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <ToastProvider>
-        <Root />
+        {isAdmin ? (
+          <AuthGate>
+            <App />
+          </AuthGate>
+        ) : (
+          <EndUserApp />
+        )}
       </ToastProvider>
     </ThemeProvider>
   </StrictMode>,

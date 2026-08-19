@@ -9,6 +9,7 @@ import { BrandTile } from "./components/ui/BrandTile";
 import { ThemeToggle } from "./components/ui/ThemeToggle";
 import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
+import { useAuth } from "./features/auth/AuthGate";
 
 type View = "chat" | "search" | "logs" | "docs" | "settings";
 
@@ -22,6 +23,7 @@ const TITLES: Record<View, string> = {
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
+  const { user, logout } = useAuth();
 
   return (
     <div
@@ -104,8 +106,18 @@ export default function App() {
         <header className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-8 dark:border-night-700 dark:bg-night-900">
           <h1 className="text-sm font-semibold text-navy dark:text-jet-100">{TITLES[view]}</h1>
           <div className="ml-auto flex items-center gap-2">
+            <span className="hidden text-xs text-slate-500 dark:text-brand-200/70 sm:inline">
+              {user.username}
+            </span>
             <StatusBadge />
             <ThemeToggle />
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-night-700 dark:text-brand-100 dark:hover:bg-night-800"
+            >
+              Keluar
+            </button>
           </div>
         </header>
 

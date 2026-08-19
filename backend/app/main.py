@@ -4,11 +4,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import (
+    auth,
     autosplit,
     chatlog,
     classify,
@@ -18,6 +19,7 @@ from app import (
     stats_store,
     taxonomy,
     templates_store,
+    users,
 )
 from app.config import settings
 from app.documents import (
@@ -47,6 +49,9 @@ from app.schemas import (
     ChatSessionSummary,
     DocumentContent,
     DocumentInfo,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
     MetadataSuggestion,
     MetadataSuggestRequest,
     ModelOption,
@@ -94,6 +99,64 @@ def submit_feedback(req: FeedbackRequest) -> dict:
     return {"status": "ok", "value": entry["value"]}
 
 
+# --------------------------- Autentikasi (guard) ---------------------------
+# Endpoint yang boleh diakses tanpa login (dipakai halaman chat end-user).
+# Sisanya (dokumen, settings, templates, admin, models, metadata) butuh token.
+_PUBLIC_PATHS = {
+    "/",
+    "/health",
+    "/taxonomy",
+    "/ask",
+    "/ask/stream",
+    "/feedback",
+    "/auth/login",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/docs/oauth2-redirect",
+}
+
+
+def _is_public_path(path: str) -> bool:
+    if path in _PUBLIC_PATHS:
+        return True
+    # /stats/popular dipakai empty-state chat end-user.
+    if path.startswith("/stats/"):
+        return True
+    return False
+
+
+@app.middleware("http")
+async def _auth_guard(request: Request, call_next):
+    """Tolak permintaan ke endpoint admin tanpa token yang valid.
+
+    Preflight CORS (OPTIONS) & endpoint publik dibiarkan lewat. Middleware ini
+    sengaja didaftarkan SEBELUM CORSMiddleware supaya CORS tetap membungkus
+    respons 401 (header CORS ikut terpasang di browser).
+    """
+    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+        return await call_next(request)
+    user = auth.current_user(request)
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail": "Sesi tidak valid atau kedaluwarsa. Silakan login lagi."
+            },
+        )
+    request.state.user = user
+    return await call_next(request)
+
+
+@app.on_event("startup")
+def _seed_admin_on_startup() -> None:
+    """Buat admin pertama dari environment bila tabel akun masih kosong."""
+    try:
+        users.ensure_seed_admin()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Seed admin saat startup gagal: %s", exc)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -102,6 +165,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --------------------------- Autentikasi (endpoint) ---------------------------
+
+
+@app.post("/auth/login", response_model=LoginResponse)
+def login_endpoint(req: LoginRequest):
+    """Login admin: verifikasi username+password, kembalikan token akses."""
+    user = users.authenticate(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Username atau password salah.")
+    token = auth.create_access_token(user["username"], user["role"])
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@app.get("/auth/me", response_model=MeResponse)
+def me_endpoint(request: Request):
+    """Kembalikan user aktif bila token valid (dipakai frontend saat mount)."""
+    user = auth.current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sesi tidak valid.")
+    return {"user": user}
 
 
 def _save_upload(file: UploadFile) -> Path:
