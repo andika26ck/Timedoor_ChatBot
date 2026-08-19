@@ -19,18 +19,16 @@ export function HistoryPanel() {
 
   return (
     <div className="flex h-full flex-col bg-jet-100 dark:bg-night-950">
-      <div className="shrink-0 border-b border-slate-200 bg-white px-6 dark:border-night-700 dark:bg-night-900">
+      <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-4 sm:px-6 dark:border-night-700 dark:bg-night-900">
         <div className="flex gap-1">
           <TabButton
             active={tab === "chats"}
             onClick={() => setTab("chats")}
-            icon="🕒"
             label="Percakapan Pengguna"
           />
           <TabButton
             active={tab === "audit"}
             onClick={() => setTab("audit")}
-            icon="📜"
             label="Aktivitas Admin"
           />
         </div>
@@ -51,12 +49,10 @@ export function HistoryPanel() {
 function TabButton({
   active,
   onClick,
-  icon,
   label,
 }: {
   active: boolean;
   onClick: () => void;
-  icon: string;
   label: string;
 }) {
   return (
@@ -64,13 +60,12 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={
-        "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition " +
+        "whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition " +
         (active
           ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200"
           : "border-transparent text-slate-500 hover:text-jet-700 dark:text-brand-200/60 dark:hover:text-brand-100")
       }
     >
-      <span className="text-base">{icon}</span>
       {label}
     </button>
   );

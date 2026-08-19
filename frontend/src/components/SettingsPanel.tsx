@@ -211,8 +211,8 @@ export function SettingsPanel() {
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
-      <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-        <section className={`p-6 ${CARD}`}>
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+        <section className={`p-4 sm:p-6 ${CARD}`}>
           <h2 className="text-base font-semibold text-navy dark:text-jet-100">System Prompt</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
             Atur gaya &amp; aturan jawaban AI sebebas mungkin. Ini instruksi dasar yang dipakai
@@ -264,7 +264,7 @@ export function SettingsPanel() {
           )}
         </section>
 
-        <section className={`p-6 ${CARD}`}>
+        <section className={`p-4 sm:p-6 ${CARD}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-semibold text-navy dark:text-jet-100">Model AI</h2>

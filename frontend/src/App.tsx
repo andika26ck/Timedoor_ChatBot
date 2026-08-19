@@ -23,15 +23,36 @@ const TITLES: Record<View, string> = {
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
+  const [navOpen, setNavOpen] = useState(false);
   const { user, logout } = useAuth();
+
+  // Pindah menu sekaligus tutup drawer (khusus tampilan mobile).
+  function go(v: View) {
+    setView(v);
+    setNavOpen(false);
+  }
 
   return (
     <div
       data-theme-root
       className="flex h-screen bg-jet-100 text-jet-700 dark:bg-night-950 dark:text-jet-100"
     >
-      {/* Sidebar */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-night-700 dark:bg-night-900">
+      {/* Backdrop drawer (hanya mobile, saat menu terbuka) */}
+      {navOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-jet-900/40 backdrop-blur-sm md:hidden"
+          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar: statis di desktop, drawer geser di mobile */}
+      <aside
+        className={
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 md:static md:z-auto md:translate-x-0 dark:border-night-700 dark:bg-night-900 " +
+          (navOpen ? "translate-x-0" : "-translate-x-full")
+        }
+      >
         {/*
           Kartu identitas Cobee — tidak polos, dilapisi pattern tile brand.
           Light : brand-600 + tile putih.
@@ -68,31 +89,31 @@ export default function App() {
             label="Chat"
             icon="💬"
             active={view === "chat"}
-            onClick={() => setView("chat")}
+            onClick={() => go("chat")}
           />
           <NavItem
             label="Uji Pencarian"
             icon="🔎"
             active={view === "search"}
-            onClick={() => setView("search")}
+            onClick={() => go("search")}
           />
           <NavItem
             label="Riwayat & Log"
             icon="🕒"
             active={view === "logs"}
-            onClick={() => setView("logs")}
+            onClick={() => go("logs")}
           />
           <NavItem
             label="Dokumen"
             icon="📄"
             active={view === "docs"}
-            onClick={() => setView("docs")}
+            onClick={() => go("docs")}
           />
           <NavItem
             label="System Prompt"
             icon="⚙️"
             active={view === "settings"}
-            onClick={() => setView("settings")}
+            onClick={() => go("settings")}
           />
         </nav>
 
@@ -103,13 +124,37 @@ export default function App() {
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-8 dark:border-night-700 dark:bg-night-900">
-          <h1 className="text-sm font-semibold text-navy dark:text-jet-100">{TITLES[view]}</h1>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4 sm:px-6 md:px-8 dark:border-night-700 dark:bg-night-900">
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Buka menu"
+            className="-ml-1 rounded-lg p-2 text-jet-600 transition hover:bg-jet-100 md:hidden dark:text-brand-100 dark:hover:bg-night-800"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <h1 className="min-w-0 truncate text-sm font-semibold text-navy dark:text-jet-100">
+            {TITLES[view]}
+          </h1>
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-xs text-slate-500 dark:text-brand-200/70 sm:inline">
               {user.username}
             </span>
-            <StatusBadge />
+            <div className="hidden sm:block">
+              <StatusBadge />
+            </div>
             <ThemeToggle />
             <button
               type="button"

@@ -179,7 +179,7 @@ export function SearchTestPanel() {
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
-      <div className="mx-auto max-w-4xl space-y-4 px-6 py-8">
+      <div className="mx-auto max-w-4xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <div>
           <h2 className="text-base font-semibold text-navy dark:text-jet-100">Uji Pencarian</h2>
