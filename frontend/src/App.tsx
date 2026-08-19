@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { AuditLogPanel } from "./components/AuditLogPanel";
-import { ChatLogsPanel } from "./components/ChatLogsPanel";
 import { DocumentsPanel } from "./components/DocumentsPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { SearchTestPanel } from "./components/SearchTestPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import StatusBadge from "./components/StatusBadge";
@@ -12,15 +11,14 @@ import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
 import { useAuth } from "./features/auth/AuthGate";
 
-type View = "chat" | "search" | "logs" | "docs" | "settings" | "audit";
+type View = "chat" | "search" | "logs" | "docs" | "settings";
 
 const TITLES: Record<View, string> = {
   chat: "Chat (uji coba)",
   search: "Uji Pencarian",
-  logs: "Riwayat Pengguna",
+  logs: "Riwayat & Log Aktivitas",
   docs: "Kelola Dokumen",
   settings: "System Prompt",
-  audit: "Log Aktivitas",
 };
 
 export default function App() {
@@ -79,7 +77,7 @@ export default function App() {
             onClick={() => setView("search")}
           />
           <NavItem
-            label="Riwayat"
+            label="Riwayat & Log"
             icon="🕒"
             active={view === "logs"}
             onClick={() => setView("logs")}
@@ -95,12 +93,6 @@ export default function App() {
             icon="⚙️"
             active={view === "settings"}
             onClick={() => setView("settings")}
-          />
-          <NavItem
-            label="Log Aktivitas"
-            icon="📜"
-            active={view === "audit"}
-            onClick={() => setView("audit")}
           />
         </nav>
 
@@ -137,16 +129,13 @@ export default function App() {
             <SearchTestPanel />
           </div>
           <div className={view === "logs" ? "h-full" : "hidden"}>
-            <ChatLogsPanel />
+            <HistoryPanel />
           </div>
           <div className={view === "docs" ? "h-full" : "hidden"}>
             <DocumentsPanel />
           </div>
           <div className={view === "settings" ? "h-full" : "hidden"}>
             <SettingsPanel />
-          </div>
-          <div className={view === "audit" ? "h-full" : "hidden"}>
-            <AuditLogPanel />
           </div>
         </div>
       </main>
