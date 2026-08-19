@@ -272,6 +272,16 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         or (existing.get("source_group") if existing else "")
         or ""
     )
+    # Jejak pelaku (watermark): siapa pertama upload (created_by) & siapa
+    # terakhir mengubah (updated_by). Diteruskan dari endpoint lewat meta["actor"].
+    # created_by dicatat sekali saat dokumen dibuat lalu DIPERTAHANKAN tiap update.
+    actor = (meta.get("actor") or "").strip()
+    if existing:
+        created_by = existing.get("created_by") or actor or ""
+        updated_by = actor or existing.get("updated_by") or ""
+    else:
+        created_by = actor
+        updated_by = actor
     entry = {
         "id": existing["id"] if existing else uuid.uuid4().hex,
         "chunking": {"max_tokens": max_tokens, "overlap": overlap},
@@ -288,6 +298,8 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         "created_at": created_at,
         "uploaded_at": now,
         "source_group": source_group,
+        "created_by": created_by,
+        "updated_by": updated_by,
     }
     return registry.add_doc(entry)
 

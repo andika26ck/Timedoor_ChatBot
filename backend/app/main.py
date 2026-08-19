@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import (
+    audit,
     auth,
     autosplit,
     chatlog,
@@ -43,6 +44,7 @@ from app.schemas import (
     AddTextRequest,
     AskRequest,
     AskResponse,
+    AuditEvent,
     AutoSplitResponse,
     AutoSplitTextRequest,
     ChatLogMessage,
@@ -78,6 +80,14 @@ def _http_error(exc: Exception) -> HTTPException:
     """
     status, detail = explain(exc)
     return HTTPException(status_code=status, detail=detail)
+
+
+def _actor(request: Request) -> str:
+    """Username admin yang sedang login (diset middleware auth). '' bila anonim."""
+    user = getattr(request.state, "user", None)
+    if isinstance(user, dict):
+        return (user.get("username") or "").strip()
+    return ""
 
 
 from app import feedback_store
@@ -464,6 +474,33 @@ def admin_chat_session_detail(session_id: str):
         raise _http_error(exc) from exc
 
 
+# ----------------------- Log Aktivitas (admin) -----------------------
+
+
+@app.get("/admin/audit-logs", response_model=list[AuditEvent])
+def admin_audit_logs(
+    limit: int = 200,
+    offset: int = 0,
+    since: str | None = None,
+    until: str | None = None,
+    action: str | None = None,
+    username: str | None = None,
+):
+    """Log aktivitas admin (upload/edit/hapus/setelan) — terbaru di atas."""
+    try:
+        return audit.list_events(
+            limit=limit,
+            offset=offset,
+            since=since,
+            until=until,
+            action=action,
+            username=username,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal memuat log aktivitas")
+        raise _http_error(exc) from exc
+
+
 # --------------------------- Saran metadata (AI) ---------------------------
 
 
@@ -497,6 +534,7 @@ def document_content(doc_id: str):
 
 @app.post("/documents/file", response_model=DocumentInfo)
 def create_document_file(
+    request: Request,
     file: UploadFile = File(...),
     category: str = Form(""),
     domain: str = Form(""),
@@ -505,29 +543,50 @@ def create_document_file(
     related: str = Form(""),
 ):
     dest = _save_upload(file)
+    actor = _actor(request)
     meta = _meta_from_form(category, domain, topics, summary, related)
+    meta["actor"] = actor
     try:
-        return add_file(dest, dest.name, meta)
+        entry = add_file(dest, dest.name, meta)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal menambah dokumen")
         raise _http_error(exc) from exc
+    audit.record(
+        actor,
+        "document.create",
+        target=entry.get("display_name") or entry.get("filename"),
+        target_id=entry.get("id"),
+        details={"via": "file", "filename": entry.get("filename")},
+    )
+    return entry
 
 
 @app.post("/documents/text", response_model=DocumentInfo)
-def create_document_text(req: AddTextRequest):
+def create_document_text(req: AddTextRequest, request: Request):
     filename, content = _validate_text(req)
+    actor = _actor(request)
     meta = _meta_from_text(req)
+    meta["actor"] = actor
     on_conflict = req.on_conflict if req.on_conflict in ("overwrite", "new") else "overwrite"
     try:
-        return add_text(content, filename, meta, on_conflict)
+        entry = add_text(content, filename, meta, on_conflict)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal menambah dokumen teks")
         raise _http_error(exc) from exc
+    audit.record(
+        actor,
+        "document.create",
+        target=entry.get("display_name") or entry.get("filename"),
+        target_id=entry.get("id"),
+        details={"via": "text"},
+    )
+    return entry
 
 
 @app.put("/documents/{doc_id}/file", response_model=DocumentInfo)
 def update_document_file(
     doc_id: str,
+    request: Request,
     file: UploadFile = File(...),
     category: str = Form(""),
     domain: str = Form(""),
@@ -536,7 +595,9 @@ def update_document_file(
     related: str = Form(""),
 ):
     dest = _save_upload(file)
+    actor = _actor(request)
     meta = _meta_from_form(category, domain, topics, summary, related)
+    meta["actor"] = actor
     try:
         result = update_file(doc_id, dest, dest.name, meta)
     except Exception as exc:  # noqa: BLE001
@@ -544,13 +605,22 @@ def update_document_file(
         raise _http_error(exc) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan.")
+    audit.record(
+        actor,
+        "document.update",
+        target=result.get("display_name") or result.get("filename"),
+        target_id=result.get("id"),
+        details={"via": "file"},
+    )
     return result
 
 
 @app.put("/documents/{doc_id}/text", response_model=DocumentInfo)
-def update_document_text(doc_id: str, req: AddTextRequest):
+def update_document_text(doc_id: str, req: AddTextRequest, request: Request):
     filename, content = _validate_text(req)
+    actor = _actor(request)
     meta = _meta_from_text(req)
+    meta["actor"] = actor
     try:
         result = update_text(doc_id, content, filename, meta)
     except Exception as exc:  # noqa: BLE001
@@ -558,11 +628,18 @@ def update_document_text(doc_id: str, req: AddTextRequest):
         raise _http_error(exc) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan.")
+    audit.record(
+        actor,
+        "document.update",
+        target=result.get("display_name") or result.get("filename"),
+        target_id=result.get("id"),
+        details={"via": "text"},
+    )
     return result
 
 
 @app.delete("/documents/{doc_id}", response_model=DocumentInfo)
-def delete_document(doc_id: str):
+def delete_document(doc_id: str, request: Request):
     try:
         result = delete_doc(doc_id)
     except Exception as exc:  # noqa: BLE001
@@ -570,6 +647,12 @@ def delete_document(doc_id: str):
         raise _http_error(exc) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan.")
+    audit.record(
+        _actor(request),
+        "document.delete",
+        target=result.get("display_name") or result.get("filename"),
+        target_id=result.get("id"),
+    )
     return result
 
 
@@ -649,13 +732,19 @@ def auto_split_file_endpoint(
 
 
 @app.post("/documents/reset", response_model=ResetResponse)
-def reset_documents_endpoint():
+def reset_documents_endpoint(request: Request):
     """Kosongkan seluruh knowledge base (dokumen + indeks vektor + file lokal)."""
     try:
         deleted = reset_all()
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal mengosongkan knowledge base")
         raise _http_error(exc) from exc
+    audit.record(
+        _actor(request),
+        "kb.reset",
+        target="Seluruh knowledge base",
+        details={"deleted": deleted},
+    )
     return {"deleted": deleted}
 
 
@@ -711,7 +800,7 @@ def get_settings_endpoint():
 
 
 @app.put("/settings", response_model=SettingsInfo)
-def update_settings_endpoint(req: SettingsUpdate):
+def update_settings_endpoint(req: SettingsUpdate, request: Request):
     """Ubah system prompt, model, dan/atau chunking. Field kosong dibiarkan.
 
     Catatan chunking: angka baru TIDAK mengubah dokumen yang sudah ter-index.
@@ -720,7 +809,7 @@ def update_settings_endpoint(req: SettingsUpdate):
         python -m scripts.index_documents
     """
     try:
-        return settings_store.update_settings(
+        result = settings_store.update_settings(
             system_prompt=req.system_prompt,
             model=req.model,
             classify_model=req.classify_model,
@@ -730,6 +819,24 @@ def update_settings_endpoint(req: SettingsUpdate):
     except ValueError as exc:
         # Angka chunking di luar rentang yang sah -> 400, bukan 500.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    changed = [
+        field
+        for field, value in (
+            ("system_prompt", req.system_prompt),
+            ("model", req.model),
+            ("classify_model", req.classify_model),
+            ("chunk_max_tokens", req.chunk_max_tokens),
+            ("chunk_overlap_tokens", req.chunk_overlap_tokens),
+        )
+        if value is not None
+    ]
+    audit.record(
+        _actor(request),
+        "settings.update",
+        target="Kelola DB",
+        details={"changed": changed},
+    )
+    return result
 
 
 @app.get("/models", response_model=list[ModelOption])

@@ -100,12 +100,16 @@ function DetailModal({
   loading,
   createdAt,
   updatedAt,
+  createdBy,
+  updatedBy,
   onClose,
 }: {
   data: DocumentContent | null;
   loading: boolean;
   createdAt?: string;
   updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
   onClose: () => void;
 }) {
   return (
@@ -128,11 +132,25 @@ function DetailModal({
             ✕
           </button>
         </div>
-        {!loading && (createdAt || updatedAt) && (
+        {!loading && (createdAt || updatedAt || createdBy || updatedBy) && (
           <div className="border-b border-slate-100 px-5 py-2 text-[11px] text-slate-400 dark:border-night-800 dark:text-brand-200/60">
             Diupload {fmtDate(createdAt || updatedAt)}
+            {createdBy ? (
+              <>
+                {" "}oleh{" "}
+                <b className="font-medium text-slate-500 dark:text-brand-200/80">{createdBy}</b>
+              </>
+            ) : null}
             {createdAt && updatedAt && updatedAt !== createdAt ? (
-              <> · Diperbarui {fmtDate(updatedAt)}</>
+              <>
+                {" "}· Diperbarui {fmtDate(updatedAt)}
+                {updatedBy ? (
+                  <>
+                    {" "}oleh{" "}
+                    <b className="font-medium text-slate-500 dark:text-brand-200/80">{updatedBy}</b>
+                  </>
+                ) : null}
+              </>
             ) : null}
           </div>
         )}
@@ -956,8 +974,26 @@ export function DocumentsPanel() {
                             )}
                             <p className="mt-1.5 text-[11px] text-slate-400 dark:text-brand-200/50">
                               Diupload {fmtDate(doc.created_at || doc.uploaded_at)}
+                              {doc.created_by ? (
+                                <>
+                                  {" "}oleh{" "}
+                                  <b className="font-medium text-slate-500 dark:text-brand-200/80">
+                                    {doc.created_by}
+                                  </b>
+                                </>
+                              ) : null}
                               {doc.created_at && doc.uploaded_at !== doc.created_at ? (
-                                <> · Diperbarui {fmtDate(doc.uploaded_at)}</>
+                                <>
+                                  {" "}· Diperbarui {fmtDate(doc.uploaded_at)}
+                                  {doc.updated_by ? (
+                                    <>
+                                      {" "}oleh{" "}
+                                      <b className="font-medium text-slate-500 dark:text-brand-200/80">
+                                        {doc.updated_by}
+                                      </b>
+                                    </>
+                                  ) : null}
+                                </>
                               ) : null}
                             </p>
                           </div>
@@ -1009,6 +1045,8 @@ export function DocumentsPanel() {
             loading={detailLoading}
             createdAt={detailDoc?.created_at || detailDoc?.uploaded_at}
             updatedAt={detailDoc?.uploaded_at}
+            createdBy={detailDoc?.created_by}
+            updatedBy={detailDoc?.updated_by}
             onClose={() => setDetailOpen(false)}
           />
         )}

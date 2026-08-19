@@ -9,6 +9,7 @@ import * as mock from "./mock";
 import { clearToken, getToken, setToken } from "./auth";
 import type {
   AskResponse,
+  AuditEvent,
   AutoSplitResult,
   ChatHistoryTurn,
   ChatLogMessage,
@@ -29,6 +30,7 @@ import type {
 // Diekspor ulang agar komponen cukup import dari "../lib/api".
 export type {
   AskResponse,
+  AuditEvent,
   AutoSplitResult,
   ChatHistoryTurn,
   ChatLogMessage,
@@ -599,4 +601,27 @@ export async function getChatSessions(params?: {
 export async function getChatSession(sessionId: string): Promise<ChatLogMessage[]> {
   if (USE_MOCK) return [];
   return req<ChatLogMessage[]>(`/admin/chat-logs/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+/* --------------------------- Log Aktivitas (admin) --------------------------- */
+
+/** Daftar aksi admin (upload/edit/hapus/setelan), terbaru di atas. */
+export async function getAuditLogs(params?: {
+  limit?: number;
+  offset?: number;
+  since?: string;
+  until?: string;
+  action?: string;
+  username?: string;
+}): Promise<AuditEvent[]> {
+  if (USE_MOCK) return [];
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.since) q.set("since", params.since);
+  if (params?.until) q.set("until", params.until);
+  if (params?.action) q.set("action", params.action);
+  if (params?.username) q.set("username", params.username);
+  const qs = q.toString();
+  return req<AuditEvent[]>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
 }

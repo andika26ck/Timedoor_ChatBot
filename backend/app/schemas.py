@@ -132,6 +132,22 @@ class ChatSessionSummary(BaseModel):
     first_question: str = ""
 
 
+class AuditEvent(BaseModel):
+    """Satu baris log aktivitas admin (menu "Log Aktivitas").
+
+    action memakai konvensi "<objek>.<aksi>", mis. "document.create",
+    "document.update", "document.delete", "kb.reset", "settings.update".
+    """
+
+    id: int = 0
+    ts: str = ""
+    username: str = ""
+    action: str = ""
+    target: str = ""
+    target_id: str = ""
+    details: dict = {}
+
+
 class FeedbackRequest(BaseModel):
     """Umpan balik (up/down) dari frontend, dipakai POST /feedback.
 
@@ -180,6 +196,11 @@ class DocumentInfo(BaseModel):
     related: list[str] = []
     # Grup sumber (Smart Upload) untuk fitur auto-hapus bagian lama.
     source_group: str = ""
+    # Jejak pelaku (watermark): siapa yang PERTAMA mengupload dokumen ini
+    # (created_by) dan siapa yang TERAKHIR mengubahnya (updated_by). Default
+    # kosong supaya entri lama (tanpa field ini) tetap valid.
+    created_by: str = ""
+    updated_by: str = ""
 
 
 class OrphanScanRequest(BaseModel):

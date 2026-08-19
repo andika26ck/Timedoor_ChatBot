@@ -67,6 +67,10 @@ export interface DocumentInfo {
   created_at?: string;
   /** Grup sumber (Smart Upload); dipakai fitur auto-hapus bagian lama. */
   source_group?: string;
+  /** Siapa yang pertama mengupload dokumen ini (watermark). */
+  created_by?: string;
+  /** Siapa yang terakhir mengubah dokumen ini (watermark). */
+  updated_by?: string;
   category: string;
   domain: string;
   topics: string[];
@@ -177,6 +181,23 @@ export interface ChatLogMessage {
   domain?: string;
   topic?: string;
   created_at: string;
+}
+
+/** Satu baris log aktivitas admin (menu Log Aktivitas). */
+export interface AuditEvent {
+  id: number;
+  /** Waktu aksi (ISO-8601 UTC). */
+  ts: string;
+  /** Username admin pelaku aksi. */
+  username: string;
+  /** Kode aksi, mis. "document.create", "kb.reset", "settings.update". */
+  action: string;
+  /** Nama objek yang terpengaruh (mis. nama dokumen). */
+  target: string;
+  /** ID objek terkait (mis. id dokumen), bila ada. */
+  target_id: string;
+  /** Detail tambahan spesifik per aksi. */
+  details: Record<string, unknown>;
 }
 
 /* ------------------------------ Uji Pencarian (retrieval-only) ------------------------------ */

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AuditLogPanel } from "./components/AuditLogPanel";
 import { ChatLogsPanel } from "./components/ChatLogsPanel";
 import { DocumentsPanel } from "./components/DocumentsPanel";
 import { SearchTestPanel } from "./components/SearchTestPanel";
@@ -11,7 +12,7 @@ import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
 import { useAuth } from "./features/auth/AuthGate";
 
-type View = "chat" | "search" | "logs" | "docs" | "settings";
+type View = "chat" | "search" | "logs" | "docs" | "settings" | "audit";
 
 const TITLES: Record<View, string> = {
   chat: "Chat (uji coba)",
@@ -19,6 +20,7 @@ const TITLES: Record<View, string> = {
   logs: "Riwayat Pengguna",
   docs: "Kelola Dokumen",
   settings: "Kelola DB",
+  audit: "Log Aktivitas",
 };
 
 export default function App() {
@@ -94,6 +96,12 @@ export default function App() {
             active={view === "settings"}
             onClick={() => setView("settings")}
           />
+          <NavItem
+            label="Log Aktivitas"
+            icon="📜"
+            active={view === "audit"}
+            onClick={() => setView("audit")}
+          />
         </nav>
 
         <div className="mt-auto border-t border-slate-100 p-4 text-xs text-slate-400 dark:border-night-700 dark:text-brand-200/60">
@@ -136,6 +144,9 @@ export default function App() {
           </div>
           <div className={view === "settings" ? "h-full" : "hidden"}>
             <SettingsPanel />
+          </div>
+          <div className={view === "audit" ? "h-full" : "hidden"}>
+            <AuditLogPanel />
           </div>
         </div>
       </main>
