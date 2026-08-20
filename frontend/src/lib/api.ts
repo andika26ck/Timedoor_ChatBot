@@ -62,6 +62,20 @@ const RUNTIME_API_URL =
 const API_URL = RUNTIME_API_URL ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
+// API key opsional untuk konsumsi API dari luar (widget/CMS). Prioritas sama
+// seperti API URL: runtime (embed via <script data-api-key>) -> env build ->
+// kosong. Kosong = header tidak dikirim (perilaku lama untuk dashboard admin).
+const RUNTIME_API_KEY =
+  typeof window !== "undefined"
+    ? (window as unknown as Record<string, string | undefined>).__TD_CHATBOT_API_KEY
+    : undefined;
+const API_KEY = RUNTIME_API_KEY ?? import.meta.env.VITE_API_KEY ?? "";
+
+/** Header X-API-Key bila API key diset; objek kosong = tidak dikirim. */
+function apiKeyHeader(): Record<string, string> {
+  return API_KEY ? { "X-API-Key": API_KEY } : {};
+}
+
 /**
  * ID sesi anonim per-browser. Dikirim bersama tiap pertanyaan agar admin bisa
  * mengelompokkan percakapan di halaman Riwayat Pengguna. Tidak ada data
@@ -114,14 +128,12 @@ async function readError(res: Response): Promise<string> {
 /** Sisipkan header Authorization bila ada token admin tersimpan. */
 function withAuth(init?: RequestInit): RequestInit {
   const token = getToken();
-  if (!token) return init ?? {};
-  return {
-    ...init,
-    headers: {
-      ...(init?.headers as Record<string, string> | undefined),
-      Authorization: `Bearer ${token}`,
-    },
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+    ...apiKeyHeader(),
   };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return { ...init, headers };
 }
 
 /** Token ditolak server (401): bersihkan sesi & minta UI login ulang. */
@@ -154,7 +166,7 @@ async function reqVoid(path: string, init?: RequestInit): Promise<void> {
 function json(method: string, body: unknown, signal?: AbortSignal): RequestInit {
   return {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...apiKeyHeader() },
     body: JSON.stringify(body),
     signal,
   };
@@ -243,9 +255,16 @@ export async function askQuestionStream(
     return;
   }
 
+  const streamHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...apiKeyHeader(),
+  };
+  const streamToken = getToken();
+  if (streamToken) streamHeaders.Authorization = `Bearer ${streamToken}`;
+
   const res = await fetch(`${API_URL}/ask/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: streamHeaders,
     body: JSON.stringify({
       question,
       domain: domain || null,

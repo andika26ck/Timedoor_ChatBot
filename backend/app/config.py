@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     auth_seed_admin_username: str = ""
     auth_seed_admin_password: str = ""
 
+    # --- Konsumsi API dari luar (widget/CMS) ---
+    # Kalau diisi, endpoint chat publik (/ask, /ask/stream) butuh header
+    # X-API-Key yang cocok. Kosong = endpoint tetap terbuka (perilaku lama),
+    # sehingga menambah env ini tidak memutus akses yang sudah berjalan.
+    public_api_key: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

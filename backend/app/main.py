@@ -136,6 +136,18 @@ def _is_public_path(path: str) -> bool:
     return False
 
 
+# Endpoint chat yang boleh dikonsumsi dari luar (widget/CMS). Bila
+# PUBLIC_API_KEY diisi, endpoint ini butuh header X-API-Key yang cocok —
+# kecuali pemanggilnya admin yang sudah login (mis. panel Chat di dashboard).
+_CONSUMABLE_PATHS = {"/ask", "/ask/stream"}
+
+
+def _valid_public_api_key(request: Request) -> bool:
+    """True bila header X-API-Key cocok dengan PUBLIC_API_KEY yang diset."""
+    key = settings.public_api_key
+    return bool(key) and request.headers.get("x-api-key") == key
+
+
 @app.middleware("http")
 async def _auth_guard(request: Request, call_next):
     """Tolak permintaan ke endpoint admin tanpa token yang valid.
@@ -144,7 +156,21 @@ async def _auth_guard(request: Request, call_next):
     sengaja didaftarkan SEBELUM CORSMiddleware supaya CORS tetap membungkus
     respons 401 (header CORS ikut terpasang di browser).
     """
-    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    path = request.url.path
+    if _is_public_path(path):
+        # Gerbang API key untuk endpoint chat yang dikonsumsi dari luar.
+        if (
+            settings.public_api_key
+            and path in _CONSUMABLE_PATHS
+            and not auth.current_user(request)
+            and not _valid_public_api_key(request)
+        ):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "API key tidak valid atau tidak disertakan."},
+            )
         return await call_next(request)
     user = auth.current_user(request)
     if not user:

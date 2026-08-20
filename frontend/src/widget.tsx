@@ -20,6 +20,7 @@ import cssText from "./index.css?inline";
 
 type WidgetConfig = {
   apiUrl?: string;
+  apiKey?: string;
   title?: string;
   subtitle?: string;
   mountId?: string;
@@ -34,6 +35,7 @@ function readConfig(): WidgetConfig {
   const d = el?.dataset ?? {};
   return {
     apiUrl: d.apiUrl,
+    apiKey: d.apiKey,
     title: d.title,
     subtitle: d.subtitle,
     mountId: d.mountId ?? "td-chatbot",
@@ -45,6 +47,10 @@ function mount(config: WidgetConfig) {
   // API URL runtime (dibaca oleh lib/api.ts).
   if (config.apiUrl) {
     (window as unknown as Record<string, string>).__TD_CHATBOT_API_URL = config.apiUrl;
+  }
+  // API key runtime (opsional) — dikirim sebagai header X-API-Key oleh lib/api.ts.
+  if (config.apiKey) {
+    (window as unknown as Record<string, string>).__TD_CHATBOT_API_KEY = config.apiKey;
   }
 
   const host =
