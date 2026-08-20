@@ -55,25 +55,37 @@ export type {
 } from "./types";
 
 // Prioritas: konfigurasi runtime (embed via <script data-api-url>) -> env build -> default.
-const RUNTIME_API_URL =
-  typeof window !== "undefined"
-    ? (window as unknown as Record<string, string | undefined>).__TD_CHATBOT_API_URL
-    : undefined;
-const API_URL = RUNTIME_API_URL ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+//
+// PENTING: nilai dibaca DINAMIS setiap kali dipakai (bukan const sekali di awal).
+// Widget menuliskan window.__TD_CHATBOT_API_URL / __TD_CHATBOT_API_KEY di dalam
+// mount(), yang berjalan SETELAH modul ini selesai di-load. Kalau ditangkap sekali
+// di awal, nilai dari atribut data-* akan selalu kosong -> header X-API-Key tidak
+// pernah terkirim -> backend menolak dengan 401.
+function getApiUrl(): string {
+  const runtime =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, string | undefined>).__TD_CHATBOT_API_URL
+      : undefined;
+  return runtime ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+}
+
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
 // API key opsional untuk konsumsi API dari luar (widget/CMS). Prioritas sama
 // seperti API URL: runtime (embed via <script data-api-key>) -> env build ->
 // kosong. Kosong = header tidak dikirim (perilaku lama untuk dashboard admin).
-const RUNTIME_API_KEY =
-  typeof window !== "undefined"
-    ? (window as unknown as Record<string, string | undefined>).__TD_CHATBOT_API_KEY
-    : undefined;
-const API_KEY = RUNTIME_API_KEY ?? import.meta.env.VITE_API_KEY ?? "";
+function getApiKey(): string {
+  const runtime =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, string | undefined>).__TD_CHATBOT_API_KEY
+      : undefined;
+  return runtime ?? import.meta.env.VITE_API_KEY ?? "";
+}
 
 /** Header X-API-Key bila API key diset; objek kosong = tidak dikirim. */
 function apiKeyHeader(): Record<string, string> {
-  return API_KEY ? { "X-API-Key": API_KEY } : {};
+  const key = getApiKey();
+  return key ? { "X-API-Key": key } : {};
 }
 
 /**
@@ -145,7 +157,7 @@ function handleUnauthorized(): void {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, withAuth(init));
+  const res = await fetch(`${getApiUrl()}${path}`, withAuth(init));
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error(await readError(res));
@@ -155,7 +167,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function reqVoid(path: string, init?: RequestInit): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, withAuth(init));
+  const res = await fetch(`${getApiUrl()}${path}`, withAuth(init));
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error(await readError(res));
@@ -182,7 +194,7 @@ export interface AdminUser {
 
 /** Login admin: simpan token bila berhasil, kembalikan info user. */
 export async function login(username: string, password: string): Promise<AdminUser> {
-  const res = await fetch(`${API_URL}/auth/login`, json("POST", { username, password }));
+  const res = await fetch(`${getApiUrl()}/auth/login`, json("POST", { username, password }));
   if (!res.ok) throw new Error(await readError(res));
   const data = (await res.json()) as { access_token: string; user: AdminUser };
   setToken(data.access_token);
@@ -262,7 +274,7 @@ export async function askQuestionStream(
   const streamToken = getToken();
   if (streamToken) streamHeaders.Authorization = `Bearer ${streamToken}`;
 
-  const res = await fetch(`${API_URL}/ask/stream`, {
+  const res = await fetch(`${getApiUrl()}/ask/stream`, {
     method: "POST",
     headers: streamHeaders,
     body: JSON.stringify({
@@ -368,7 +380,7 @@ export interface FeedbackPayload {
 export async function sendFeedback(payload: FeedbackPayload): Promise<void> {
   if (USE_MOCK) return;
   try {
-    await fetch(`${API_URL}/feedback`, json("POST", payload));
+    await fetch(`${getApiUrl()}/feedback`, json("POST", payload));
   } catch {
     /* diabaikan */
   }
