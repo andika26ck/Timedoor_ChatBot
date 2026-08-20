@@ -47,6 +47,7 @@ from app.store import get_store_name
 from app.schemas import (
     AddTextRequest,
     AskRequest,
+    ApiUsageResponse,
     AskResponse,
     AuditEvent,
     AutoSplitResponse,
@@ -597,7 +598,11 @@ def admin_audit_logs(
     action: str | None = None,
     username: str | None = None,
 ):
-    """Log aktivitas admin (upload/edit/hapus/setelan) — terbaru di atas."""
+    """Log aktivitas admin (upload/edit/hapus/setelan) — terbaru di atas.
+
+    Baris pemakaian API (action "api.*") sengaja dikecualikan; lihat tab
+    "Penggunaan API" (/admin/api-usage) untuk pemantauan konsumen API.
+    """
     try:
         return audit.list_events(
             limit=limit,
@@ -606,9 +611,41 @@ def admin_audit_logs(
             until=until,
             action=action,
             username=username,
+            exclude_api=True,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat log aktivitas")
+        raise _http_error(exc) from exc
+
+
+@app.get("/admin/api-usage", response_model=ApiUsageResponse)
+def admin_api_usage(
+    limit: int = 50,
+    offset: int = 0,
+    consumer: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    days: int = 14,
+):
+    """Pemantauan pemakaian API per konsumen: ringkasan, tren harian, & tabel.
+
+    Dipakai tab "Penggunaan API" di dashboard. Berbeda dari log aktivitas admin
+    yang mencatat perubahan knowledge base, endpoint ini hanya menampilkan
+    panggilan API konsumen (widget/CMS) untuk keperluan monitoring.
+    """
+    try:
+        summary = audit.api_usage_summary(days=days)
+        rows = audit.list_api_usage(
+            limit=limit,
+            offset=offset,
+            consumer=consumer,
+            since=since,
+            until=until,
+        )
+        total = audit.count_api_usage(consumer=consumer, since=since, until=until)
+        return {"summary": summary, "rows": rows, "total_rows": total}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal memuat penggunaan API")
         raise _http_error(exc) from exc
 
 

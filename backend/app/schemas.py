@@ -148,6 +148,51 @@ class AuditEvent(BaseModel):
     details: dict = {}
 
 
+class ApiUsageRow(BaseModel):
+    """Satu baris pemakaian API (tab "Penggunaan API")."""
+
+    id: int = 0
+    ts: str = ""
+    consumer: str = ""
+    action: str = ""
+    endpoint: str = ""
+    session_id: str = ""
+
+
+class ApiUsageConsumer(BaseModel):
+    """Ringkasan pemakaian per konsumen (kartu ringkasan)."""
+
+    consumer: str = ""
+    count: int = 0
+    last_7d: int = 0
+
+
+class ApiUsageDay(BaseModel):
+    """Jumlah panggilan API pada satu tanggal (grafik tren harian)."""
+
+    date: str = ""
+    count: int = 0
+
+
+class ApiUsageSummary(BaseModel):
+    """Ringkasan agregat pemakaian API untuk kartu + grafik."""
+
+    total: int = 0
+    last_24h: int = 0
+    last_7d: int = 0
+    last_30d: int = 0
+    consumers: list[ApiUsageConsumer] = []
+    daily: list[ApiUsageDay] = []
+
+
+class ApiUsageResponse(BaseModel):
+    """Respons endpoint /admin/api-usage: ringkasan + tabel berpaginasi."""
+
+    summary: ApiUsageSummary
+    rows: list[ApiUsageRow] = []
+    total_rows: int = 0
+
+
 class FeedbackRequest(BaseModel):
     """Umpan balik (up/down) dari frontend, dipakai POST /feedback.
 

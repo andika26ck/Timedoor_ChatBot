@@ -200,6 +200,53 @@ export interface AuditEvent {
   details: Record<string, unknown>;
 }
 
+/* ------------------------------ Penggunaan API (monitoring konsumen) ------------------------------ */
+
+/** Satu baris pemakaian API (tab Penggunaan API). */
+export interface ApiUsageRow {
+  id: number;
+  /** Waktu panggilan (ISO-8601 UTC). */
+  ts: string;
+  /** Nama konsumen (tanpa prefiks "api:"), mis. "widget-public". */
+  consumer: string;
+  /** Kode aksi, mis. "api.ask", "api.ask_stream". */
+  action: string;
+  /** Endpoint yang dipanggil, mis. "/ask". */
+  endpoint: string;
+  /** ID sesi terkait, bila ada. */
+  session_id: string;
+}
+
+/** Ringkasan pemakaian per konsumen (kartu ringkasan). */
+export interface ApiUsageConsumer {
+  consumer: string;
+  count: number;
+  last_7d: number;
+}
+
+/** Jumlah panggilan API pada satu tanggal (grafik tren harian). */
+export interface ApiUsageDay {
+  date: string;
+  count: number;
+}
+
+/** Ringkasan agregat pemakaian API. */
+export interface ApiUsageSummary {
+  total: number;
+  last_24h: number;
+  last_7d: number;
+  last_30d: number;
+  consumers: ApiUsageConsumer[];
+  daily: ApiUsageDay[];
+}
+
+/** Respons endpoint /admin/api-usage. */
+export interface ApiUsageResult {
+  summary: ApiUsageSummary;
+  rows: ApiUsageRow[];
+  total_rows: number;
+}
+
 /* ------------------------------ Uji Pencarian (retrieval-only) ------------------------------ */
 
 /** Satu chunk hasil retrieval beserta skor & metadata (panel Uji Pencarian). */

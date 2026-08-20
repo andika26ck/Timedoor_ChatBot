@@ -8,6 +8,7 @@
 import * as mock from "./mock";
 import { clearToken, getToken, setToken } from "./auth";
 import type {
+  ApiUsageResult,
   AskResponse,
   AuditEvent,
   AutoSplitResult,
@@ -29,6 +30,11 @@ import type {
 
 // Diekspor ulang agar komponen cukup import dari "../lib/api".
 export type {
+  ApiUsageConsumer,
+  ApiUsageDay,
+  ApiUsageResult,
+  ApiUsageRow,
+  ApiUsageSummary,
   AskResponse,
   AuditEvent,
   AutoSplitResult,
@@ -655,4 +661,29 @@ export async function getAuditLogs(params?: {
   if (params?.username) q.set("username", params.username);
   const qs = q.toString();
   return req<AuditEvent[]>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+}
+
+/* --------------------------- Penggunaan API (monitoring) --------------------------- */
+
+/** Ringkasan + tabel pemakaian API per konsumen (tab Penggunaan API). */
+export async function getApiUsage(params?: {
+  limit?: number;
+  offset?: number;
+  consumer?: string;
+  since?: string;
+  until?: string;
+  days?: number;
+}): Promise<ApiUsageResult> {
+  if (USE_MOCK) {
+    return { summary: { total: 0, last_24h: 0, last_7d: 0, last_30d: 0, consumers: [], daily: [] }, rows: [], total_rows: 0 };
+  }
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.consumer) q.set("consumer", params.consumer);
+  if (params?.since) q.set("since", params.since);
+  if (params?.until) q.set("until", params.until);
+  if (params?.days) q.set("days", String(params.days));
+  const qs = q.toString();
+  return req<ApiUsageResult>(`/admin/api-usage${qs ? `?${qs}` : ""}`);
 }

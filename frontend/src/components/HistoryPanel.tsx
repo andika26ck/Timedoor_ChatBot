@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { ApiUsagePanel } from "./ApiUsagePanel";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { ChatLogsPanel } from "./ChatLogsPanel";
 
-type Tab = "chats" | "audit";
+type Tab = "chats" | "audit" | "api";
 
 /**
  * Menu gabungan "Riwayat & Log Aktivitas" dengan dua tab:
@@ -31,6 +32,11 @@ export function HistoryPanel() {
             onClick={() => setTab("audit")}
             label="Aktivitas Admin"
           />
+          <TabButton
+            active={tab === "api"}
+            onClick={() => setTab("api")}
+            label="Penggunaan API"
+          />
         </div>
       </div>
 
@@ -40,6 +46,9 @@ export function HistoryPanel() {
         </div>
         <div className={tab === "audit" ? "h-full" : "hidden"}>
           <AuditLogPanel />
+        </div>
+        <div className={tab === "api" ? "h-full" : "hidden"}>
+          <ApiUsagePanel />
         </div>
       </div>
     </div>
