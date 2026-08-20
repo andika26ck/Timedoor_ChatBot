@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # X-API-Key yang cocok. Kosong = endpoint tetap terbuka (perilaku lama),
     # sehingga menambah env ini tidak memutus akses yang sudah berjalan.
     public_api_key: str = ""
+    # Wajibkan API key untuk endpoint chat (/ask, /ask/stream). Kalau False,
+    # endpoint tetap terbuka KECUALI public_api_key diisi. Set True bila hanya
+    # memakai key per-konsumen (tabel api_keys) tanpa key global.
+    public_api_required: bool = False
+    # Batas jumlah permintaan /ask per menit untuk pemanggil non-admin (per API
+    # key, atau per IP bila tanpa key). 0 = nonaktif.
+    rate_limit_per_min: int = 60
 
     @property
     def cors_origins_list(self) -> list[str]:

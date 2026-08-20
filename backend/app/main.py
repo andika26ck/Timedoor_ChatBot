@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 import shutil
@@ -7,14 +8,17 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app import (
+    api_keys,
     audit,
     auth,
     autosplit,
     chatlog,
     classify,
     models_catalog,
+    ratelimit,
     registry,
     settings_store,
     stats_store,
@@ -136,41 +140,102 @@ def _is_public_path(path: str) -> bool:
     return False
 
 
-# Endpoint chat yang boleh dikonsumsi dari luar (widget/CMS). Bila
-# PUBLIC_API_KEY diisi, endpoint ini butuh header X-API-Key yang cocok —
-# kecuali pemanggilnya admin yang sudah login (mis. panel Chat di dashboard).
+# Endpoint chat yang boleh dikonsumsi dari luar (widget/CMS).
 _CONSUMABLE_PATHS = {"/ask", "/ask/stream"}
 
 
-def _valid_public_api_key(request: Request) -> bool:
-    """True bila header X-API-Key cocok dengan PUBLIC_API_KEY yang diset."""
-    key = settings.public_api_key
-    return bool(key) and request.headers.get("x-api-key") == key
+def _api_protection_enabled() -> bool:
+    """True bila endpoint chat harus dilindungi API key.
 
-
-@app.middleware("http")
-async def _auth_guard(request: Request, call_next):
-    """Tolak permintaan ke endpoint admin tanpa token yang valid.
-
-    Preflight CORS (OPTIONS) & endpoint publik dibiarkan lewat. Middleware ini
-    sengaja didaftarkan SEBELUM CORSMiddleware supaya CORS tetap membungkus
-    respons 401 (header CORS ikut terpasang di browser).
+    Aktif jika PUBLIC_API_REQUIRED=true ATAU PUBLIC_API_KEY (key global) diisi.
+    Kalau nonaktif, /ask tetap terbuka (hanya dijaga CORS + rate limit).
     """
-    if request.method == "OPTIONS":
+    return bool(settings.public_api_required or settings.public_api_key)
+
+
+def _client_ip(request: Request) -> str:
+    """IP pemanggil, menghormati X-Forwarded-For (di belakang proxy Railway)."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+async def _resolve_api_key(request: Request) -> dict | None:
+    """Kembalikan info konsumen bila X-API-Key valid, atau None.
+
+    Menerima key global (env PUBLIC_API_KEY) dan key per-konsumen (tabel
+    api_keys). Lookup DB dijalankan di threadpool agar tidak memblokir loop.
+    """
+    key = (request.headers.get("x-api-key") or "").strip()
+    if not key:
+        return None
+    if settings.public_api_key and hmac.compare_digest(key, settings.public_api_key):
+        return {"name": "global", "rate_limit_per_min": None}
+    return await run_in_threadpool(api_keys.verify_token, key)
+
+
+async def _guard_consumable(request: Request, call_next):
+    """Proteksi /ask & /ask/stream: API key (opsional) + rate limit.
+
+    - Admin yang sudah login selalu diizinkan (panel Chat di dashboard).
+    - Bila proteksi aktif, wajib X-API-Key valid (global atau per-konsumen).
+    - Rate limit diterapkan per konsumen (atau per IP bila tanpa key).
+    """
+    admin = auth.current_user(request)
+    if admin:
+        request.state.user = admin
         return await call_next(request)
-    path = request.url.path
-    if _is_public_path(path):
-        # Gerbang API key untuk endpoint chat yang dikonsumsi dari luar.
-        if (
-            settings.public_api_key
-            and path in _CONSUMABLE_PATHS
-            and not auth.current_user(request)
-            and not _valid_public_api_key(request)
-        ):
+
+    consumer_name: str | None = None
+    consumer_limit = None
+    if _api_protection_enabled():
+        info = await _resolve_api_key(request)
+        if info is None:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "API key tidak valid atau tidak disertakan."},
             )
+        consumer_name = info.get("name")
+        consumer_limit = info.get("rate_limit_per_min")
+    request.state.api_consumer = consumer_name
+
+    limit = (
+        int(consumer_limit)
+        if consumer_limit
+        else int(settings.rate_limit_per_min or 0)
+    )
+    if limit > 0:
+        identity = consumer_name or ("ip:" + _client_ip(request))
+        allowed, retry_after = ratelimit.hit(identity, limit)
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": (
+                        "Terlalu banyak permintaan. Coba lagi dalam "
+                        f"{retry_after} detik."
+                    )
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def _auth_guard(request: Request, call_next):
+    """Gerbang akses: OPTIONS & endpoint publik lewat; /ask dijaga API key +
+    rate limit; sisanya wajib login admin.
+
+    Middleware ini sengaja didaftarkan SEBELUM CORSMiddleware supaya CORS tetap
+    membungkus respons 401/429 (header CORS ikut terpasang di browser).
+    """
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    path = request.url.path
+    if path in _CONSUMABLE_PATHS:
+        return await _guard_consumable(request, call_next)
+    if _is_public_path(path):
         return await call_next(request)
     user = auth.current_user(request)
     if not user:
@@ -308,6 +373,24 @@ def _log_chat(req: AskRequest, question: str, answer: str) -> None:
         chatlog.log_message(sid, "assistant", answer, req.domain, req.topic)
 
 
+def _audit_api_usage(request: Request, action: str, req: AskRequest) -> None:
+    """Catat pemakaian API per konsumen (best-effort).
+
+    Hanya dicatat bila pemanggil memakai API key (bukan admin/anonim). Dipakai
+    untuk audit 'siapa memanggil API dan kapan' di tabel audit_log.
+    """
+    consumer = getattr(request.state, "api_consumer", None)
+    if not consumer:
+        return
+    audit.record(
+        username=f"api:{consumer}",
+        action=f"api.{action}",
+        target=f"/{action.replace('_', '/')}",
+        target_id=(req.session_id or "").strip() or None,
+        details={"domain": req.domain or "", "topic": req.topic or ""},
+    )
+
+
 @app.get("/")
 def root():
     return {"service": "Timedoor FAQ Bot API", "docs": "/docs"}
@@ -364,7 +447,7 @@ def get_taxonomy():
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask_endpoint(req: AskRequest):
+def ask_endpoint(req: AskRequest, request: Request):
     question = req.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
@@ -381,11 +464,12 @@ def ask_endpoint(req: AskRequest):
         else getattr(result, "answer", "")
     )
     _log_chat(req, question, answer_text or "")
+    _audit_api_usage(request, "ask", req)
     return result
 
 
 @app.post("/ask/stream")
-def ask_stream_endpoint(req: AskRequest):
+def ask_stream_endpoint(req: AskRequest, request: Request):
     """Versi streaming dari /ask, memakai Server-Sent Events (SSE).
 
     Tiap baris berbentuk `data: {json}` dengan field `type`:
@@ -424,6 +508,7 @@ def ask_stream_endpoint(req: AskRequest):
         # catat frekuensi hanya kalau seluruh stream berhasil
         stats_store.record_question(question)
         _log_chat(req, question, "".join(answer_parts))
+        _audit_api_usage(request, "ask_stream", req)
         yield sse({"type": "done"})
 
     return StreamingResponse(
