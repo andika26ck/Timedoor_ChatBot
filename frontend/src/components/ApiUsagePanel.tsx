@@ -190,7 +190,7 @@ export function ApiUsagePanel() {
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500 dark:text-brand-200/70">
                     <b className="text-jet-700 dark:text-jet-100">{c.count.toLocaleString("id-ID")}</b> total
-                    <span className="mx-1">\u00b7</span>
+                    <span className="mx-1">&middot;</span>
                     {c.last_7d.toLocaleString("id-ID")} (7h)
                   </div>
                 </div>
