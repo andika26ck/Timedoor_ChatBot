@@ -410,6 +410,63 @@ def update_text(
 # ------------------------------ Pratinjau isi dokumen ------------------------------
 
 
+def _text_from_store(entry: dict) -> str:
+    """Rangkai ulang teks dokumen dari chunk yang tersimpan di Postgres.
+
+    Dipakai sebagai fallback saat file lokal hilang: chunk (beserta teksnya)
+    tetap tersimpan di vector store meski filesystem server ter-reset (mis.
+    redeploy di Railway), jadi pratinjau masih bisa ditampilkan.
+
+    Matching sengaja TOLERAN: doc_id chunk pada indeks lama bisa berbeda dari
+    `filename` sekarang (beda basename/path). Jadi kita cocokkan lewat beberapa
+    pengenal dari registry (filename, doc_name, id, display_name) + basename-nya,
+    dan juga metadata chunk (doc_id/doc_name/display_name/judul). Chunk yang
+    cocok diurutkan berdasarkan chunk_index lalu digabungkan.
+    """
+    if not entry:
+        return ""
+    cands: set[str] = set()
+    for key in ("filename", "doc_name", "id", "display_name"):
+        v = (str(entry.get(key) or "")).strip()
+        if v:
+            cands.add(v)
+            cands.add(Path(v).name)
+    if not cands:
+        return ""
+    try:
+        store = get_vector_store()
+        records = store.all_records()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Gagal ambil chunk dari store: %s", exc)
+        return ""
+
+    def _matches(r: dict) -> bool:
+        did = (str(r.get("doc_id") or "")).strip()
+        if did and (did in cands or Path(did).name in cands):
+            return True
+        m = r.get("metadata") or {}
+        for mk in ("doc_id", "doc_name", "display_name", "judul"):
+            mv = (str(m.get(mk) or "")).strip()
+            if mv and (mv in cands or Path(mv).name in cands):
+                return True
+        return False
+
+    rows = [r for r in records if _matches(r)]
+    if not rows:
+        return ""
+
+    def _idx(r: dict) -> int:
+        m = r.get("metadata") or {}
+        try:
+            return int(m.get("chunk_index", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    rows.sort(key=_idx)
+    parts = [(r.get("text") or "").strip() for r in rows]
+    return "\n\n".join(p for p in parts if p)
+
+
 def read_content(doc_id: str) -> dict | None:
     """Kembalikan isi (teks) dokumen untuk fitur \"Detail\" di UI."""
     entry = registry.get_doc(doc_id)
@@ -418,11 +475,23 @@ def read_content(doc_id: str) -> dict | None:
     filename = entry.get("filename") or ""
     path = DATA_DIR / filename
     if not filename or not path.exists():
-        content = (
-            "(File lokal tidak ditemukan. Dokumen mungkin diindeks di versi "
-            "sebelumnya sebelum fitur pratinjau ada.)"
-        )
-        truncated = False
+        rebuilt = _text_from_store(entry)
+        if rebuilt:
+            note = (
+                "(Pratinjau direkonstruksi dari indeks knowledge base karena "
+                "file asli tidak tersimpan di server. Sedikit tumpang tindih "
+                "antar bagian itu normal.)\n\n"
+            )
+            content = note + rebuilt
+            truncated = len(content) > _PREVIEW_LIMIT
+            if truncated:
+                content = content[:_PREVIEW_LIMIT] + "\n\n... (dipotong)"
+        else:
+            content = (
+                "(File lokal tidak ditemukan. Dokumen mungkin diindeks di versi "
+                "sebelumnya sebelum fitur pratinjau ada.)"
+            )
+            truncated = False
     else:
         content = _extract_text(path)
         truncated = len(content) > _PREVIEW_LIMIT
