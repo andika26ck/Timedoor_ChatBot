@@ -264,3 +264,24 @@ def get_session(session_id: str) -> list[dict]:
         return out
 
     return _run(op)
+
+
+def last_activity_by_user() -> dict[str, str]:
+    """Map user_id -> ISO waktu chat terakhir (untuk kolom 'Terakhir aktif').
+
+    Hanya baris dengan user_id terisi (sesi login) yang dihitung, sehingga
+    admin bisa melihat kapan tiap akun terakhir mengirim pertanyaan.
+    """
+
+    def op(conn):
+        cur = conn.execute(
+            f"""
+            SELECT user_id, MAX(created_at) AS last_at
+            FROM {_TABLE}
+            WHERE user_id IS NOT NULL AND user_id <> ''
+            GROUP BY user_id
+            """
+        )
+        return {r[0]: _iso(r[1]) for r in cur.fetchall()}
+
+    return _run(op)

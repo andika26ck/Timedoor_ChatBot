@@ -291,6 +291,7 @@ def login_endpoint(req: LoginRequest):
     user = users.authenticate(req.username, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Username atau password salah.")
+    users.touch_login(user["username"])
     token = auth.create_access_token(
         user["username"], user["role"], name=user.get("name")
     )
@@ -304,6 +305,7 @@ def register_endpoint(req: RegisterRequest):
         user = users.register_user(req.email, req.password, req.name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    users.touch_login(user["username"])
     token = auth.create_access_token(
         user["username"], user["role"], name=user.get("name")
     )
@@ -743,9 +745,25 @@ def admin_api_usage(
 
 @app.get("/users", response_model=list[UserInfo])
 def list_users_endpoint():
-    """Daftar semua akun (admin & end-user). Tanpa password_hash."""
+    """Daftar semua akun (admin & end-user). Tanpa password_hash.
+
+    'last_active' = waktu paling baru antara login terakhir (last_login_at)
+    dan pertanyaan chat terakhir (dari chat_logs, cocok via user_id = email).
+    """
     try:
-        return users.list_users()
+        rows = users.list_users()
+        try:
+            activity = chatlog.last_activity_by_user()
+        except Exception:  # noqa: BLE001
+            activity = {}
+        for u in rows:
+            candidates = [
+                t
+                for t in (u.get("last_login_at"), activity.get(u.get("username")))
+                if t
+            ]
+            u["last_active"] = max(candidates) if candidates else None
+        return rows
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat daftar user")
         raise _http_error(exc) from exc

@@ -416,6 +416,7 @@ class UserInfo(BaseModel):
     role: str = "admin"
     created_at: str | None = None
     name: str | None = None
+    last_active: str | None = None
 
 
 class LoginResponse(BaseModel):

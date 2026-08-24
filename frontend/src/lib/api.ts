@@ -220,6 +220,7 @@ export interface AdminUser {
   role: string;
   created_at?: string | null;
   name?: string | null;
+  last_active?: string | null;
 }
 
 /** Login admin: simpan token bila berhasil, kembalikan info user. */

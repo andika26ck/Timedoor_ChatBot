@@ -67,6 +67,9 @@ def _connect():
         """
     )
     conn.execute(f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS name TEXT")
+    conn.execute(
+        f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS last_login_at TEXT"
+    )
     return conn
 
 
@@ -159,12 +162,19 @@ def list_users() -> list[dict]:
 
     def op(conn):
         cur = conn.execute(
-            f"SELECT username, role, created_at, name FROM {_TABLE} ORDER BY username"
+            f"SELECT username, role, created_at, name, last_login_at "
+            f"FROM {_TABLE} ORDER BY username"
         )
         return cur.fetchall()
 
     return [
-        {"username": r[0], "role": r[1], "created_at": r[2], "name": r[3]}
+        {
+            "username": r[0],
+            "role": r[1],
+            "created_at": r[2],
+            "name": r[3],
+            "last_login_at": r[4],
+        }
         for r in _run(op)
     ]
 
@@ -276,6 +286,28 @@ def authenticate(username: str, password: str) -> dict | None:
         "role": user["role"],
         "name": user.get("name"),
     }
+
+
+def touch_login(username: str) -> None:
+    """Catat waktu login terakhir (dipakai kolom 'Terakhir aktif').
+
+    Best-effort: kegagalan tidak boleh menggagalkan proses login.
+    """
+    uname = _norm(username)
+    if not uname:
+        return
+    when = datetime.now(timezone.utc).isoformat()
+
+    def op(conn):
+        conn.execute(
+            f"UPDATE {_TABLE} SET last_login_at = %s WHERE username = %s",
+            (when, uname),
+        )
+
+    try:
+        _run(op)
+    except Exception:  # noqa: BLE001
+        logger.warning("Gagal mencatat waktu login untuk %s", uname)
 
 
 def ensure_seed_admin() -> None:

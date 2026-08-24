@@ -101,6 +101,10 @@ export function UsersPanel() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [error, setError] = useState("");
 
+  // Pencarian & filter.
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+
   // Form tambah user.
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
@@ -136,6 +140,19 @@ export function UsersPanel() {
     const admin = list.filter((u) => u.role === "admin").length;
     return { total: list.length, admin, user: list.length - admin };
   }, [users]);
+
+  const filtered = useMemo(() => {
+    const list = users ?? [];
+    const q = query.trim().toLowerCase();
+    return list.filter((u) => {
+      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (!q) return true;
+      return (
+        u.username.toLowerCase().includes(q) ||
+        (u.name ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, query, roleFilter]);
 
   async function handleAdd(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -280,6 +297,32 @@ export function UsersPanel() {
           </form>
         )}
 
+        {/* Pencarian & filter */}
+        {users !== null && users.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={`${FIELD} sm:max-w-xs`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cari nama atau email…"
+            />
+            <select
+              className={`${FIELD} sm:w-44`}
+              value={roleFilter}
+              onChange={(e) =>
+                setRoleFilter(e.target.value as "all" | "admin" | "user")
+              }
+            >
+              <option value="all">Semua role</option>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+            <span className="text-xs text-slate-400 dark:text-brand-200/50">
+              {filtered.length} dari {users.length}
+            </span>
+          </div>
+        )}
+
         {/* Tabel user */}
         <div className={CARD}>
           {error && (
@@ -304,11 +347,22 @@ export function UsersPanel() {
                     <th className="px-4 py-3 font-medium">Email / Username</th>
                     <th className="px-4 py-3 font-medium">Role</th>
                     <th className="px-4 py-3 font-medium">Dibuat</th>
+                    <th className="px-4 py-3 font-medium">Terakhir aktif</th>
                     <th className="px-4 py-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => {
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-8 text-center text-sm text-slate-500 dark:text-brand-200/70"
+                      >
+                        Tidak ada akun yang cocok.
+                      </td>
+                    </tr>
+                  )}
+                  {filtered.map((u) => {
                     const isSelf = u.username === me.username;
                     return (
                       <tr
@@ -331,6 +385,15 @@ export function UsersPanel() {
                         </td>
                         <td className="px-4 py-3 text-slate-500 dark:text-brand-200/70">
                           {fmtDate(u.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-brand-200/70">
+                          {u.last_active ? (
+                            fmtDate(u.last_active)
+                          ) : (
+                            <span className="text-slate-400 dark:text-brand-200/40">
+                              Belum pernah
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
