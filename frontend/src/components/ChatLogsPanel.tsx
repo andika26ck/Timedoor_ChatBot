@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  deleteChatSession,
   getChatSession,
   getChatSessions,
   type ChatLogMessage,
@@ -13,6 +14,11 @@ const GHOST_BTN =
   "rounded-lg border px-2.5 py-1 text-xs transition " +
   "border-slate-200 text-jet-700 hover:bg-jet-100 " +
   "dark:border-night-600 dark:text-brand-100 dark:hover:bg-night-800";
+
+const DANGER_BTN =
+  "rounded-lg border px-2.5 py-1 text-xs transition " +
+  "border-red-200 text-red-600 hover:bg-red-50 " +
+  "dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10";
 
 function fmt(iso: string): string {
   if (!iso) return "-";
@@ -141,6 +147,23 @@ export function ChatLogsPanel() {
     }
   }
 
+  async function removeSession(id: string) {
+    if (
+      !window.confirm(
+        "Hapus permanen percakapan ini? Tindakan ini tidak bisa dibatalkan.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteChatSession(id);
+      setSessions((prev) => prev.filter((s) => s.session_id !== id));
+      if (openId === id) setOpenId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menghapus percakapan.");
+    }
+  }
+
   const totalQuestions = sessions.reduce((n, s) => n + s.questions, 0);
 
   return (
@@ -152,7 +175,7 @@ export function ChatLogsPanel() {
             <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
               Pantau siapa saja yang memakai chatbot: nama user (bila login lewat CMS) atau
               “Anonim”, kapan terakhir aktif, dan apa yang ditanyakan. Klik “Lihat” untuk membaca
-              seluruh percakapan.
+              seluruh percakapan. Percakapan otomatis terhapus permanen setelah 60 hari.
             </p>
           </div>
           <button type="button" onClick={() => void load()} className={GHOST_BTN}>
@@ -236,13 +259,22 @@ export function ChatLogsPanel() {
                         {fmt(s.last_at)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => void openSession(s.session_id)}
-                          className={GHOST_BTN}
-                        >
-                          Lihat
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void openSession(s.session_id)}
+                            className={GHOST_BTN}
+                          >
+                            Lihat
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void removeSession(s.session_id)}
+                            className={DANGER_BTN}
+                          >
+                            Hapus
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -257,13 +289,22 @@ export function ChatLogsPanel() {
                     <span className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
                       {s.first_question || "-"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void openSession(s.session_id)}
-                      className={`${GHOST_BTN} shrink-0`}
-                    >
-                      Lihat
-                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void openSession(s.session_id)}
+                        className={GHOST_BTN}
+                      >
+                        Lihat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void removeSession(s.session_id)}
+                        className={DANGER_BTN}
+                      >
+                        Hapus
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
                     <span className="font-medium text-jet-600 dark:text-brand-100">

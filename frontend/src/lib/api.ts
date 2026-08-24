@@ -688,6 +688,13 @@ export async function getChatSession(sessionId: string): Promise<ChatLogMessage[
   return req<ChatLogMessage[]>(`/admin/chat-logs/sessions/${encodeURIComponent(sessionId)}`);
 }
 
+/** Hapus permanen satu sesi percakapan (semua pesannya). */
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  return reqVoid(`/admin/chat-logs/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
 /* --------------------------- Log Aktivitas (admin) --------------------------- */
 
 /** Daftar aksi admin (upload/edit/hapus/setelan), terbaru di atas. */
@@ -709,6 +716,11 @@ export async function getAuditLogs(params?: {
   if (params?.username) q.set("username", params.username);
   const qs = q.toString();
   return req<AuditEvent[]>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+}
+
+/** Hapus permanen satu baris log aktivitas admin. */
+export async function deleteAuditLog(id: number): Promise<void> {
+  return reqVoid(`/admin/audit-logs/${id}`, { method: "DELETE" });
 }
 
 /* --------------------------- Penggunaan API (monitoring) --------------------------- */

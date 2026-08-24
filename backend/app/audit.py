@@ -372,3 +372,48 @@ def api_usage_summary(days: int = 14) -> dict:
         }
 
     return _run(_op)
+
+
+# ------------------------------ Hapus / Retensi ------------------------------
+
+
+def delete_event(event_id: int) -> int:
+    """Hapus permanen satu baris log aktivitas berdasarkan id."""
+    try:
+        eid = int(event_id)
+    except (TypeError, ValueError):
+        return 0
+
+    def _op(conn):
+        cur = conn.execute(f"DELETE FROM {_TABLE} WHERE id = %s", (eid,))
+        return cur.rowcount
+
+    return int(_run(_op))
+
+
+def purge_old(days: int = 60) -> int:
+    """Hapus permanen log AKTIVITAS ADMIN yang lebih tua dari `days` hari.
+
+    Baris pemakaian API (action 'api.*') sengaja DIPERTAHANKAN agar tab
+    "Penggunaan API" tidak ikut terhapus. Dipanggil best-effort saat daftar
+    log dimuat, jadi data lama otomatis hilang tanpa penjadwal terpisah.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    days = max(1, int(days or 60))
+    threshold = (
+        datetime.now(timezone.utc) - timedelta(days=days)
+    ).isoformat(timespec="seconds")
+
+    def _op(conn):
+        cur = conn.execute(
+            f"DELETE FROM {_TABLE} WHERE ts < %s AND action NOT LIKE 'api.%%'",
+            (threshold,),
+        )
+        return cur.rowcount
+
+    try:
+        return int(_run(_op))
+    except Exception:  # noqa: BLE001
+        logger.warning("Gagal menjalankan retensi audit_log (%s hari)", days)
+        return 0

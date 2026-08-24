@@ -656,8 +656,16 @@ def admin_chat_sessions(
     since: str | None = None,
     until: str | None = None,
 ):
-    """Ringkasan per sesi (anonim) untuk tabel Riwayat Pengguna di dashboard."""
+    """Ringkasan per sesi (anonim) untuk tabel Riwayat Pengguna di dashboard.
+
+    Sebelum menampilkan, jalankan retensi 60 hari (hapus permanen percakapan
+    yang lebih lama) secara best-effort.
+    """
     try:
+        try:
+            chatlog.purge_old(60)
+        except Exception:  # noqa: BLE001
+            pass
         return chatlog.list_sessions(limit=limit, offset=offset, since=since, until=until)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat daftar sesi chat")
@@ -675,6 +683,24 @@ def admin_chat_session_detail(session_id: str):
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat detail sesi chat")
         raise _http_error(exc) from exc
+
+
+@app.delete("/admin/chat-logs/sessions/{session_id}")
+def admin_delete_chat_session(session_id: str, request: Request):
+    """Hapus permanen satu sesi percakapan beserta seluruh pesannya."""
+    try:
+        deleted = chatlog.delete_session(session_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal menghapus sesi chat")
+        raise _http_error(exc) from exc
+    if deleted:
+        audit.record(
+            _actor(request),
+            "chatlog.delete",
+            target_id=session_id,
+            details={"messages": deleted},
+        )
+    return {"deleted": deleted}
 
 
 # ----------------------- Log Aktivitas (admin) -----------------------
@@ -695,6 +721,10 @@ def admin_audit_logs(
     "Penggunaan API" (/admin/api-usage) untuk pemantauan konsumen API.
     """
     try:
+        try:
+            audit.purge_old(60)
+        except Exception:  # noqa: BLE001
+            pass
         return audit.list_events(
             limit=limit,
             offset=offset,
@@ -707,6 +737,17 @@ def admin_audit_logs(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat log aktivitas")
         raise _http_error(exc) from exc
+
+
+@app.delete("/admin/audit-logs/{event_id}")
+def admin_delete_audit_log(event_id: int):
+    """Hapus permanen satu baris log aktivitas admin."""
+    try:
+        deleted = audit.delete_event(event_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal menghapus log aktivitas")
+        raise _http_error(exc) from exc
+    return {"deleted": deleted}
 
 
 @app.get("/admin/api-usage", response_model=ApiUsageResponse)

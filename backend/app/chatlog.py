@@ -285,3 +285,42 @@ def last_activity_by_user() -> dict[str, str]:
         return {r[0]: _iso(r[1]) for r in cur.fetchall()}
 
     return _run(op)
+
+
+# ------------------------------ Hapus / Retensi ------------------------------
+
+
+def delete_session(session_id: str) -> int:
+    """Hapus permanen satu sesi (semua pesannya). Kembalikan jumlah baris."""
+    sid = (session_id or "").strip()
+    if not sid:
+        return 0
+
+    def op(conn):
+        cur = conn.execute(f"DELETE FROM {_TABLE} WHERE session_id = %s", (sid,))
+        return cur.rowcount
+
+    return int(_run(op))
+
+
+def purge_old(days: int = 60) -> int:
+    """Hapus permanen percakapan yang lebih tua dari `days` hari (retensi).
+
+    Dipanggil best-effort tiap kali daftar sesi dimuat, sehingga data lama
+    otomatis hilang tanpa perlu penjadwal terpisah.
+    """
+    days = max(1, int(days or 60))
+
+    def op(conn):
+        cur = conn.execute(
+            f"DELETE FROM {_TABLE} "
+            f"WHERE created_at < now() - make_interval(days => %s)",
+            (days,),
+        )
+        return cur.rowcount
+
+    try:
+        return int(_run(op))
+    except Exception:  # noqa: BLE001
+        logger.warning("Gagal menjalankan retensi chat_logs (%s hari)", days)
+        return 0

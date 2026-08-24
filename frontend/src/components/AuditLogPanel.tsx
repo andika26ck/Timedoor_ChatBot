@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAuditLogs, type AuditEvent } from "../lib/api";
+import { deleteAuditLog, getAuditLogs, type AuditEvent } from "../lib/api";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -8,6 +8,11 @@ const GHOST_BTN =
   "rounded-lg border px-2.5 py-1 text-xs transition " +
   "border-slate-200 text-jet-700 hover:bg-jet-100 " +
   "dark:border-night-600 dark:text-brand-100 dark:hover:bg-night-800";
+
+const DANGER_BTN =
+  "rounded-lg border px-2.5 py-1 text-xs transition " +
+  "border-red-200 text-red-600 hover:bg-red-50 " +
+  "dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10";
 
 function fmt(iso: string): string {
   if (!iso) return "\u2014";
@@ -103,6 +108,16 @@ export function AuditLogPanel() {
     }
   }
 
+  async function removeEvent(id: number) {
+    if (!window.confirm("Hapus permanen entri log ini?")) return;
+    try {
+      await deleteAuditLog(id);
+      setEvents((prev) => prev.filter((e) => e.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menghapus log.");
+    }
+  }
+
   useEffect(() => {
     void load();
   }, []);
@@ -121,6 +136,7 @@ export function AuditLogPanel() {
             <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
               Jejak siapa yang mengubah knowledge base: upload, perbarui, atau hapus dokumen, reset
               KB, dan perubahan setelan di System Prompt. Terbaru ditampilkan paling atas.
+              Entri otomatis terhapus permanen setelah 60 hari.
             </p>
           </div>
           <button type="button" onClick={() => void load()} className={GHOST_BTN}>
@@ -173,6 +189,7 @@ export function AuditLogPanel() {
                     <th className="px-4 py-3 font-medium">Aksi</th>
                     <th className="px-4 py-3 font-medium">Objek</th>
                     <th className="px-4 py-3 font-medium">Keterangan</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
@@ -203,6 +220,15 @@ export function AuditLogPanel() {
                         <td className="px-4 py-3 text-xs text-slate-500 dark:text-brand-200/70">
                           {describeDetails(ev)}
                         </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => void removeEvent(ev.id)}
+                            className={DANGER_BTN}
+                          >
+                            Hapus
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -231,11 +257,20 @@ export function AuditLogPanel() {
                         {ev.target}
                       </div>
                     )}
-                    <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-400 dark:text-brand-200/60">
-                      <span className="font-medium text-slate-500 dark:text-brand-200/80">
-                        {ev.username || "—"}
-                      </span>
-                      {details !== "—" && <span>· {details}</span>}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-400 dark:text-brand-200/60">
+                        <span className="font-medium text-slate-500 dark:text-brand-200/80">
+                          {ev.username || "—"}
+                        </span>
+                        {details !== "—" && <span>· {details}</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void removeEvent(ev.id)}
+                        className={`${DANGER_BTN} shrink-0`}
+                      >
+                        Hapus
+                      </button>
                     </div>
                   </li>
                 );
