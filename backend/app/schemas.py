@@ -426,3 +426,18 @@ class LoginResponse(BaseModel):
 
 class MeResponse(BaseModel):
     user: UserInfo
+
+
+class CreateUserRequest(BaseModel):
+    """Admin membuat/menimpa akun. Role bebas: 'user' atau 'admin'."""
+
+    username: str
+    password: str
+    role: str = "user"
+    name: str = ""
+
+
+class SetPasswordRequest(BaseModel):
+    """Admin mereset password akun tertentu."""
+
+    password: str

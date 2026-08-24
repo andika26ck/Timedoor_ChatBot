@@ -3,6 +3,7 @@ import { DocumentsPanel } from "./components/DocumentsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { SearchTestPanel } from "./components/SearchTestPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { UsersPanel } from "./components/UsersPanel";
 import StatusBadge from "./components/StatusBadge";
 import { BrandAvatar } from "./components/ui/BrandAvatar";
 import { BrandTile } from "./components/ui/BrandTile";
@@ -11,7 +12,7 @@ import { ChatPanel } from "./features/chat/components/ChatPanel";
 import { ChatWidget } from "./features/chat/widget/ChatWidget";
 import { useAuth } from "./features/auth/AuthGate";
 
-type View = "chat" | "search" | "logs" | "docs" | "settings";
+type View = "chat" | "search" | "logs" | "docs" | "settings" | "users";
 
 const TITLES: Record<View, string> = {
   chat: "Chat",
@@ -19,6 +20,7 @@ const TITLES: Record<View, string> = {
   logs: "Riwayat & Log Aktivitas",
   docs: "Kelola Dokumen",
   settings: "System Prompt",
+  users: "Kelola User",
 };
 
 export default function App() {
@@ -115,6 +117,12 @@ export default function App() {
             active={view === "settings"}
             onClick={() => go("settings")}
           />
+          <NavItem
+            label="Kelola User"
+            icon={<UsersIcon />}
+            active={view === "users"}
+            onClick={() => go("users")}
+          />
         </nav>
 
         <div className="mt-auto border-t border-slate-100 p-4 text-xs text-slate-400 dark:border-night-700 dark:text-brand-200/60">
@@ -181,6 +189,9 @@ export default function App() {
           </div>
           <div className={view === "settings" ? "h-full" : "hidden"}>
             <SettingsPanel />
+          </div>
+          <div className={view === "users" ? "h-full" : "hidden"}>
+            <UsersPanel />
           </div>
         </div>
       </main>
@@ -268,6 +279,21 @@ function PromptIcon() {
       <circle cx="12" cy="17.5" r="4.3" />
       <circle cx="6.5" cy="12" r="4.3" />
       <circle cx="17.5" cy="12" r="4.3" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.6" fill="#34d399" />
+      <circle cx="17" cy="9" r="2.8" fill="#34d399" fillOpacity="0.55" />
+      <path d="M2.5 19.5c0-3.6 2.9-5.6 6.5-5.6s6.5 2 6.5 5.6z" fill="#34d399" />
+      <path
+        d="M16.6 13.9c3 0 4.9 1.8 4.9 4.6h-4.1c0-1.8-.5-3.4-1.6-4.6z"
+        fill="#34d399"
+        fillOpacity="0.55"
+      />
     </svg>
   );
 }

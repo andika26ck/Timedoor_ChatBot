@@ -56,10 +56,13 @@ from app.schemas import (
     ChatSessionSummary,
     DocumentContent,
     DocumentInfo,
+    CreateUserRequest,
     LoginRequest,
     LoginResponse,
     MeResponse,
     RegisterRequest,
+    SetPasswordRequest,
+    UserInfo,
     MetadataSuggestion,
     MetadataSuggestRequest,
     ModelOption,
@@ -733,6 +736,85 @@ def admin_api_usage(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Gagal memuat penggunaan API")
         raise _http_error(exc) from exc
+
+
+# --------------------------- Kelola User (admin) ---------------------------
+
+
+@app.get("/users", response_model=list[UserInfo])
+def list_users_endpoint():
+    """Daftar semua akun (admin & end-user). Tanpa password_hash."""
+    try:
+        return users.list_users()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Gagal memuat daftar user")
+        raise _http_error(exc) from exc
+
+
+@app.post("/users", response_model=UserInfo)
+def create_user_endpoint(req: CreateUserRequest, request: Request):
+    """Buat akun baru. Bila username sudah ada, password & role diperbarui."""
+    role = (req.role or "user").strip().lower()
+    if role not in ("user", "admin"):
+        raise HTTPException(status_code=400, detail="Role harus 'user' atau 'admin'.")
+    try:
+        result = users.create_user(req.username, req.password, role, req.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit.record(
+        _actor(request),
+        "user.create",
+        target=result.get("username"),
+        details={"role": role},
+    )
+    return result
+
+
+@app.post("/users/{username}/password")
+def reset_user_password_endpoint(
+    username: str, req: SetPasswordRequest, request: Request
+) -> dict:
+    """Reset password akun tertentu."""
+    try:
+        ok = users.set_password(username, req.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan.")
+    audit.record(_actor(request), "user.reset_password", target=username.strip().lower())
+    return {"status": "ok"}
+
+
+@app.delete("/users/{username}")
+def delete_user_endpoint(username: str, request: Request) -> dict:
+    """Hapus akun. Tidak bisa menghapus diri sendiri atau admin terakhir."""
+    target = (username or "").strip().lower()
+    if not target:
+        raise HTTPException(status_code=400, detail="Username tidak valid.")
+    if target == _actor(request):
+        raise HTTPException(
+            status_code=400,
+            detail="Tidak bisa menghapus akun yang sedang dipakai.",
+        )
+    all_users = users.list_users()
+    victim = next((u for u in all_users if u["username"] == target), None)
+    if victim is None:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan.")
+    if victim["role"] == "admin":
+        admin_count = sum(1 for u in all_users if u["role"] == "admin")
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Tidak bisa menghapus admin terakhir.",
+            )
+    users.delete_user(target)
+    audit.record(
+        _actor(request),
+        "user.delete",
+        target=target,
+        details={"role": victim["role"]},
+    )
+    return {"status": "ok"}
 
 
 # --------------------------- Saran metadata (AI) ---------------------------

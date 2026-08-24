@@ -734,3 +734,36 @@ export async function getApiUsage(params?: {
   const qs = q.toString();
   return req<ApiUsageResult>(`/admin/api-usage${qs ? `?${qs}` : ""}`);
 }
+
+/* --------------------------- Kelola User (admin) --------------------------- */
+
+/** Daftar semua akun (admin & end-user chatbot). */
+export async function listUsers(): Promise<AdminUser[]> {
+  return req<AdminUser[]>("/users");
+}
+
+/** Buat akun baru. Bila username sudah ada, password & role diperbarui. */
+export async function createUser(
+  username: string,
+  password: string,
+  role: "user" | "admin" = "user",
+  name = "",
+): Promise<AdminUser> {
+  return req<AdminUser>("/users", json("POST", { username, password, role, name }));
+}
+
+/** Reset password akun tertentu (khusus admin). */
+export async function resetUserPassword(
+  username: string,
+  password: string,
+): Promise<void> {
+  await req<{ status: string }>(
+    `/users/${encodeURIComponent(username)}/password`,
+    json("POST", { password }),
+  );
+}
+
+/** Hapus akun. */
+export async function deleteUser(username: string): Promise<void> {
+  return reqVoid(`/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+}
