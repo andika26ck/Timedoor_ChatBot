@@ -417,7 +417,9 @@ def _identity_fields(
     # 0. Sesi login terverifikasi (JWT) — identitas PALING tepercaya karena
     #    ditandatangani server, bukan dikirim mentah dari browser.
     acct = auth.current_user(request)
-    if acct and acct.get("role") == "user":
+    if acct and acct.get("role") in ("user", "admin"):
+        # Akun login mana pun (end-user chatbot ATAU admin yang mencoba lewat
+        # dashboard) dikaitkan ke identitasnya, bukan dicatat sebagai Anonim.
         email = (acct.get("username") or "").strip() or None
         name = (acct.get("name") or "").strip() or None
         return (email, name, email, "account")
