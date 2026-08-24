@@ -21,6 +21,9 @@ import cssText from "./index.css?inline";
 type WidgetConfig = {
   apiUrl?: string;
   apiKey?: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
   title?: string;
   subtitle?: string;
   mountId?: string;
@@ -36,6 +39,9 @@ function readConfig(): WidgetConfig {
   return {
     apiUrl: d.apiUrl,
     apiKey: d.apiKey,
+    userId: d.userId,
+    userName: d.userName,
+    userEmail: d.userEmail,
     title: d.title,
     subtitle: d.subtitle,
     mountId: d.mountId ?? "td-chatbot",
@@ -51,6 +57,17 @@ function mount(config: WidgetConfig) {
   // API key runtime (opsional) — dikirim sebagai header X-API-Key oleh lib/api.ts.
   if (config.apiKey) {
     (window as unknown as Record<string, string>).__TD_CHATBOT_API_KEY = config.apiKey;
+  }
+  // Identitas user dari CMS (opsional, apa adanya) — dikirim sebagai field
+  // user_id/user_name/user_email di body /ask oleh lib/api.ts. Kosong = anonim.
+  if (config.userId) {
+    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_ID = config.userId;
+  }
+  if (config.userName) {
+    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_NAME = config.userName;
+  }
+  if (config.userEmail) {
+    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_EMAIL = config.userEmail;
   }
 
   const host =

@@ -172,6 +172,10 @@ export interface ChatSessionSummary {
   first_at: string;
   last_at: string;
   first_question: string;
+  /** Identitas user dari CMS (kosong/undefined = sesi anonim). */
+  user_id?: string;
+  user_name?: string;
+  user_email?: string;
 }
 
 /** Satu pesan dalam log percakapan (detail sesi, sisi admin). */

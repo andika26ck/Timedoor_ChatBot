@@ -150,8 +150,9 @@ export function ChatLogsPanel() {
           <div>
             <h2 className="text-base font-semibold text-navy dark:text-jet-100">Riwayat Pengguna</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
-              Pantau siapa saja (per sesi anonim) yang memakai chatbot: kapan terakhir aktif dan apa
-              yang ditanyakan. Klik “Lihat” untuk membaca seluruh percakapan.
+              Pantau siapa saja yang memakai chatbot: nama user (bila login lewat CMS) atau
+              “Anonim”, kapan terakhir aktif, dan apa yang ditanyakan. Klik “Lihat” untuk membaca
+              seluruh percakapan.
             </p>
           </div>
           <button type="button" onClick={() => void load()} className={GHOST_BTN}>
@@ -189,7 +190,7 @@ export function ChatLogsPanel() {
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400 dark:border-night-700 dark:text-brand-200/60">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Sesi</th>
+                    <th className="px-4 py-3 font-medium">Pengguna</th>
                     <th className="px-4 py-3 font-medium">Pertanyaan pertama</th>
                     <th className="px-4 py-3 text-center font-medium">Tanya</th>
                     <th className="px-4 py-3 font-medium">Terakhir aktif</th>
@@ -199,8 +200,29 @@ export function ChatLogsPanel() {
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
                   {sessions.map((s) => (
                     <tr key={s.session_id} className="hover:bg-jet-50 dark:hover:bg-night-800/50">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-brand-200/70">
-                        {shortId(s.session_id)}
+                      <td className="px-4 py-3">
+                        {s.user_name || s.user_email ? (
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-jet-700 dark:text-brand-100">
+                              {s.user_name || s.user_email}
+                            </div>
+                            {s.user_name && s.user_email && (
+                              <div className="truncate text-xs text-slate-400 dark:text-brand-200/60">
+                                {s.user_email}
+                              </div>
+                            )}
+                            <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
+                              {shortId(s.session_id)}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="min-w-0">
+                            <div className="italic text-slate-400 dark:text-brand-200/60">Anonim</div>
+                            <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
+                              {shortId(s.session_id)}
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="max-w-md px-4 py-3">
                         <span className="line-clamp-2 text-jet-700 dark:text-brand-100">
@@ -244,7 +266,10 @@ export function ChatLogsPanel() {
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
-                    <span className="font-mono">{shortId(s.session_id)}</span>
+                    <span className="font-medium text-jet-600 dark:text-brand-100">
+                      {s.user_name || s.user_email || "Anonim"}
+                    </span>
+                    <span className="font-mono">· {shortId(s.session_id)}</span>
                     <span>· {s.questions} tanya</span>
                     <span>· {fmt(s.last_at)}</span>
                   </div>

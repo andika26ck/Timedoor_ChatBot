@@ -95,6 +95,29 @@ function apiKeyHeader(): Record<string, string> {
 }
 
 /**
+ * Identitas user dari CMS (opsional), bila embed menyertakan data-user-id /
+ * data-user-name / data-user-email. Dikirim apa adanya di body /ask &
+ * /ask/stream untuk pelabelan riwayat admin (BUKAN autentikasi). Kosong = anonim.
+ */
+function getUserFields(): {
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+} {
+  const w =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, string | undefined>)
+      : ({} as Record<string, string | undefined>);
+  const pick = (runtime: string | undefined, env: string | undefined) =>
+    (runtime ?? env ?? "").trim() || null;
+  return {
+    user_id: pick(w.__TD_CHATBOT_USER_ID, import.meta.env.VITE_USER_ID),
+    user_name: pick(w.__TD_CHATBOT_USER_NAME, import.meta.env.VITE_USER_NAME),
+    user_email: pick(w.__TD_CHATBOT_USER_EMAIL, import.meta.env.VITE_USER_EMAIL),
+  };
+}
+
+/**
  * ID sesi anonim per-browser. Dikirim bersama tiap pertanyaan agar admin bisa
  * mengelompokkan percakapan di halaman Riwayat Pengguna. Tidak ada data
  * pribadi — hanya penanda acak yang disimpan di localStorage.
@@ -238,7 +261,13 @@ export async function askQuestion(
     "/ask",
     json(
       "POST",
-      { question, domain: domain || null, topic: topic || null, session_id: getSessionId() },
+      {
+        question,
+        domain: domain || null,
+        topic: topic || null,
+        session_id: getSessionId(),
+        ...getUserFields(),
+      },
       signal,
     ),
   );
@@ -289,6 +318,7 @@ export async function askQuestionStream(
       topic: topic || null,
       history: history ?? [],
       session_id: getSessionId(),
+      ...getUserFields(),
     }),
     signal,
   });

@@ -24,6 +24,11 @@ class AskRequest(BaseModel):
     # ID sesi anonim (dibuat di browser). Dipakai untuk mengelompokkan log
     # percakapan pada tracking sisi admin. Kosong/None = tidak dikelompokkan.
     session_id: str | None = None
+    # Identitas user dari CMS (opsional, dikirim apa adanya lewat embed). Dipakai
+    # HANYA untuk pelabelan di riwayat admin, BUKAN autentikasi. Kosong = anonim.
+    user_id: str | None = None
+    user_name: str | None = None
+    user_email: str | None = None
 
 
 class Citation(BaseModel):
@@ -122,7 +127,11 @@ class ChatLogMessage(BaseModel):
 
 
 class ChatSessionSummary(BaseModel):
-    """Ringkasan satu sesi anonim untuk tabel Riwayat Pengguna."""
+    """Ringkasan satu sesi untuk tabel Riwayat Pengguna.
+
+    Bila user login lewat CMS (token identitas valid), user_name/user_email/
+    user_id terisi. Kalau anonim, ketiganya kosong dan UI menampilkan "Anonim".
+    """
 
     session_id: str
     messages: int = 0
@@ -130,6 +139,10 @@ class ChatSessionSummary(BaseModel):
     first_at: str = ""
     last_at: str = ""
     first_question: str = ""
+    # Identitas user dari CMS (kosong = sesi anonim).
+    user_id: str = ""
+    user_name: str = ""
+    user_email: str = ""
 
 
 class AuditEvent(BaseModel):

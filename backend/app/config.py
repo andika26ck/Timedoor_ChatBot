@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # key, atau per IP bila tanpa key). 0 = nonaktif.
     rate_limit_per_min: int = 60
 
+    # (Opsional) Secret bersama dengan proxy CMS untuk MEMPERCAYAI header
+    # identitas `X-User-*`. Kalau diisi, backend hanya menerima `X-User-*` bila
+    # header `X-Proxy-Secret` cocok — mencegah pemalsuan lewat panggilan langsung
+    # ke API (bypass proxy). Kosong = header `X-User-*` dipercaya apa adanya
+    # (mode simpel, cocok untuk uji coba / jaringan internal).
+    identity_proxy_secret: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

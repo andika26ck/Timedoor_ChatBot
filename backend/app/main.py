@@ -362,16 +362,69 @@ def _history_payload(req: AskRequest) -> list[dict]:
     return out
 
 
-def _log_chat(req: AskRequest, question: str, answer: str) -> None:
+# Header identitas yang di-inject oleh proxy CMS tepercaya (server-side).
+# LEBIH DIPERCAYA daripada field body: user biasa lewat proxy tidak bisa
+# mengubahnya karena proxy yang mengisi berdasarkan sesi login CMS.
+_ID_HEADER = "X-User-Id"
+_NAME_HEADER = "X-User-Name"
+_EMAIL_HEADER = "X-User-Email"
+_PROXY_SECRET_HEADER = "X-Proxy-Secret"
+
+
+def _identity_fields(
+    request: Request, req: AskRequest
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Tentukan identitas user untuk log. Return (id, name, email, source).
+
+    Prioritas:
+      1. Header `X-User-*` dari proxy CMS (source="proxy") — paling dipercaya.
+         Bila `identity_proxy_secret` diset, header ini hanya diterima kalau
+         `X-Proxy-Secret` cocok (mencegah spoof via panggilan langsung ke API).
+      2. Field body `user_*` dari embed (source="embed") — fallback, bisa
+         dipalsukan dari browser, jadi hanya untuk embed langsung tanpa proxy.
+      3. Tidak ada → anonim (semua None).
+    """
+    h = request.headers
+    h_id = (h.get(_ID_HEADER) or "").strip()
+    h_name = (h.get(_NAME_HEADER) or "").strip()
+    h_email = (h.get(_EMAIL_HEADER) or "").strip()
+    if h_id or h_name or h_email:
+        expected = (settings.identity_proxy_secret or "").strip()
+        supplied = (h.get(_PROXY_SECRET_HEADER) or "").strip()
+        if not expected or hmac.compare_digest(expected, supplied):
+            return (h_id or None, h_name or None, h_email or None, "proxy")
+        # Secret diset tapi tidak cocok: JANGAN percaya header ini.
+        logger.warning("X-User-* diabaikan: X-Proxy-Secret tidak cocok.")
+
+    b_id = (req.user_id or "").strip()
+    b_name = (req.user_name or "").strip()
+    b_email = (req.user_email or "").strip()
+    if b_id or b_name or b_email:
+        return (b_id or None, b_name or None, b_email or None, "embed")
+
+    return (None, None, None, None)
+
+
+def _log_chat(
+    req: AskRequest, question: str, answer: str, request: Request
+) -> None:
     """Catat percakapan ke log (best-effort) untuk tracking sisi admin.
 
-    Identitas anonim: hanya session_id (dari frontend) + waktu. Kegagalan
-    pencatatan tidak boleh mengganggu jawaban ke user.
+    Identitas diambil dari header proxy (`X-User-*`) atau field body embed;
+    kosong = anonim (hanya session_id). Kegagalan pencatatan tidak boleh
+    mengganggu jawaban ke user.
     """
     sid = (req.session_id or "").strip()
-    chatlog.log_message(sid, "user", question, req.domain, req.topic)
+    uid, uname, uemail, usrc = _identity_fields(request, req)
+    chatlog.log_message(
+        sid, "user", question, req.domain, req.topic,
+        user_id=uid, user_name=uname, user_email=uemail, source=usrc,
+    )
     if (answer or "").strip():
-        chatlog.log_message(sid, "assistant", answer, req.domain, req.topic)
+        chatlog.log_message(
+            sid, "assistant", answer, req.domain, req.topic,
+            user_id=uid, user_name=uname, user_email=uemail, source=usrc,
+        )
 
 
 def _audit_api_usage(request: Request, action: str, req: AskRequest) -> None:
@@ -464,7 +517,7 @@ def ask_endpoint(req: AskRequest, request: Request):
         if isinstance(result, dict)
         else getattr(result, "answer", "")
     )
-    _log_chat(req, question, answer_text or "")
+    _log_chat(req, question, answer_text or "", request)
     _audit_api_usage(request, "ask", req)
     return result
 
@@ -508,7 +561,7 @@ def ask_stream_endpoint(req: AskRequest, request: Request):
             return
         # catat frekuensi hanya kalau seluruh stream berhasil
         stats_store.record_question(question)
-        _log_chat(req, question, "".join(answer_parts))
+        _log_chat(req, question, "".join(answer_parts), request)
         _audit_api_usage(request, "ask_stream", req)
         yield sse({"type": "done"})
 

@@ -2,6 +2,8 @@ import StatusBadge from "./components/StatusBadge";
 import { BrandAvatar } from "./components/ui/BrandAvatar";
 import { ThemeToggle } from "./components/ui/ThemeToggle";
 import { ChatPanel } from "./features/chat/components/ChatPanel";
+import { IdentityDialog } from "./features/enduser/IdentityDialog";
+import { useEndUserIdentity } from "./features/enduser/identity";
 
 /**
  * Halaman end-user (rute "/"): ruang chat penuh & bersih.
@@ -12,7 +14,11 @@ import { ChatPanel } from "./features/chat/components/ChatPanel";
  * server untuk dipantau admin di halaman Riwayat Pengguna.
  */
 export default function EndUserApp() {
+  const id = useEndUserIdentity();
+  const dialogOpen = id.editorOpen || id.needsPrompt;
+  const label = id.identity.userName || id.identity.userEmail;
   return (
+    <>
     <div
       data-theme-root
       className="flex h-screen flex-col bg-jet-100 text-jet-700 dark:bg-night-950 dark:text-jet-100"
@@ -26,6 +32,25 @@ export default function EndUserApp() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {id.hasIdentity ? (
+            <button
+              type="button"
+              onClick={id.openEditor}
+              title="Ubah identitas"
+              className="flex max-w-[10rem] items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-jet-700 hover:bg-jet-100 dark:border-night-700 dark:bg-night-800 dark:text-jet-100 dark:hover:bg-night-700"
+            >
+              <span aria-hidden="true">👤</span>
+              <span className="truncate">{label}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={id.openEditor}
+              className="rounded-full border border-brand-500 px-3 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-200 dark:hover:bg-night-800"
+            >
+              Isi identitas
+            </button>
+          )}
           <StatusBadge />
           <ThemeToggle />
         </div>
@@ -35,5 +60,14 @@ export default function EndUserApp() {
         <ChatPanel active showFilter={false} multiTurn />
       </main>
     </div>
+    <IdentityDialog
+      open={dialogOpen}
+      initial={id.identity}
+      allowSkip={id.needsPrompt && !id.editorOpen}
+      onSave={id.save}
+      onSkip={id.skip}
+      onClose={id.closeEditor}
+    />
+    </>
   );
 }

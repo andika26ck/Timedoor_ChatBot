@@ -65,6 +65,13 @@ def _connect():
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS {_TABLE}_created_idx ON {_TABLE} (created_at)"
     )
+    # Migrasi kolom identitas (sesi non-anonim). Nullable + IF NOT EXISTS,
+    # sehingga aman dijalankan berulang dan tidak mengganggu baris lama.
+    for _col in ("user_id", "user_name", "user_email", "source"):
+        conn.execute(f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS {_col} TEXT")
+    conn.execute(
+        f"CREATE INDEX IF NOT EXISTS {_TABLE}_user_idx ON {_TABLE} (user_id)"
+    )
     return conn
 
 
@@ -110,8 +117,16 @@ def log_message(
     text: str,
     domain: str | None = None,
     topic: str | None = None,
+    user_id: str | None = None,
+    user_name: str | None = None,
+    user_email: str | None = None,
+    source: str | None = None,
 ) -> None:
-    """Catat satu giliran chat. BEST-EFFORT: kegagalan TIDAK mengganggu chat."""
+    """Catat satu giliran chat. BEST-EFFORT: kegagalan TIDAK mengganggu chat.
+
+    user_id/user_name/user_email/source terisi bila user login lewat CMS
+    (token identitas valid). Kosong = percakapan anonim (perilaku lama).
+    """
     sid = (session_id or "").strip() or "anon"
     role = (role or "").strip().lower()
     body = (text or "").strip()
@@ -121,8 +136,10 @@ def log_message(
     def op(conn):
         conn.execute(
             f"""
-            INSERT INTO {_TABLE} (id, session_id, role, text, domain, topic)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {_TABLE}
+                (id, session_id, role, text, domain, topic,
+                 user_id, user_name, user_email, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 uuid.uuid4().hex,
@@ -131,6 +148,10 @@ def log_message(
                 body,
                 (domain or "").strip() or None,
                 (topic or "").strip() or None,
+                (user_id or "").strip() or None,
+                (user_name or "").strip() or None,
+                (user_email or "").strip() or None,
+                (source or "").strip() or None,
             ),
         )
 
@@ -175,7 +196,13 @@ def list_sessions(
                 MIN(created_at)                        AS first_at,
                 MAX(created_at)                        AS last_at,
                 (ARRAY_AGG(text ORDER BY created_at)
-                    FILTER (WHERE role = 'user'))[1]   AS first_question
+                    FILTER (WHERE role = 'user'))[1]   AS first_question,
+                (ARRAY_AGG(user_name ORDER BY created_at DESC)
+                    FILTER (WHERE user_name IS NOT NULL))[1]  AS user_name,
+                (ARRAY_AGG(user_email ORDER BY created_at DESC)
+                    FILTER (WHERE user_email IS NOT NULL))[1] AS user_email,
+                (ARRAY_AGG(user_id ORDER BY created_at DESC)
+                    FILTER (WHERE user_id IS NOT NULL))[1]    AS user_id
             FROM {_TABLE}
             {clause}
             GROUP BY session_id
@@ -197,6 +224,9 @@ def list_sessions(
                     "first_at": _iso(d.get("first_at")),
                     "last_at": _iso(d.get("last_at")),
                     "first_question": d.get("first_question") or "",
+                    "user_id": d.get("user_id") or "",
+                    "user_name": d.get("user_name") or "",
+                    "user_email": d.get("user_email") or "",
                 }
             )
         return out
