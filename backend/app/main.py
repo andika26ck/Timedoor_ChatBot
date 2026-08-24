@@ -431,10 +431,17 @@ def _identity_fields(
     if h_id or h_name or h_email:
         expected = (settings.identity_proxy_secret or "").strip()
         supplied = (h.get(_PROXY_SECRET_HEADER) or "").strip()
-        if not expected or hmac.compare_digest(expected, supplied):
+        # Fail-closed: X-User-* HANYA dipercaya bila IDENTITY_PROXY_SECRET sudah
+        # diset DI SERVER dan X-Proxy-Secret dari proxy cocok. Ini mencegah orang
+        # memalsukan identitas lewat panggilan langsung ke API (tanpa lewat proxy).
+        if expected and hmac.compare_digest(expected, supplied):
             return (h_id or None, h_name or None, h_email or None, "proxy")
-        # Secret diset tapi tidak cocok: JANGAN percaya header ini.
-        logger.warning("X-User-* diabaikan: X-Proxy-Secret tidak cocok.")
+        if not expected:
+            logger.warning(
+                "X-User-* diabaikan: IDENTITY_PROXY_SECRET belum diset di server."
+            )
+        else:
+            logger.warning("X-User-* diabaikan: X-Proxy-Secret tidak cocok.")
 
     b_id = (req.user_id or "").strip()
     b_name = (req.user_name or "").strip()
