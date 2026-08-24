@@ -59,6 +59,7 @@ from app.schemas import (
     LoginRequest,
     LoginResponse,
     MeResponse,
+    RegisterRequest,
     MetadataSuggestion,
     MetadataSuggestRequest,
     ModelOption,
@@ -125,6 +126,8 @@ _PUBLIC_PATHS = {
     "/ask/stream",
     "/feedback",
     "/auth/login",
+    "/auth/register",
+    "/auth/me",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -246,6 +249,13 @@ async def _auth_guard(request: Request, call_next):
                 "detail": "Sesi tidak valid atau kedaluwarsa. Silakan login lagi."
             },
         )
+    # Endpoint non-publik = area admin. Akun role "user" (end-user chatbot)
+    # tidak boleh menembus ke sini meski token-nya valid.
+    if user.get("role") != "admin":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Akun ini tidak punya akses admin."},
+        )
     request.state.user = user
     return await call_next(request)
 
@@ -278,7 +288,22 @@ def login_endpoint(req: LoginRequest):
     user = users.authenticate(req.username, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Username atau password salah.")
-    token = auth.create_access_token(user["username"], user["role"])
+    token = auth.create_access_token(
+        user["username"], user["role"], name=user.get("name")
+    )
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@app.post("/auth/register", response_model=LoginResponse)
+def register_endpoint(req: RegisterRequest):
+    """Registrasi mandiri end-user chatbot (role='user') lalu auto-login."""
+    try:
+        user = users.register_user(req.email, req.password, req.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    token = auth.create_access_token(
+        user["username"], user["role"], name=user.get("name")
+    )
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 
@@ -384,6 +409,14 @@ def _identity_fields(
          dipalsukan dari browser, jadi hanya untuk embed langsung tanpa proxy.
       3. Tidak ada → anonim (semua None).
     """
+    # 0. Sesi login terverifikasi (JWT) — identitas PALING tepercaya karena
+    #    ditandatangani server, bukan dikirim mentah dari browser.
+    acct = auth.current_user(request)
+    if acct and acct.get("role") == "user":
+        email = (acct.get("username") or "").strip() or None
+        name = (acct.get("name") or "").strip() or None
+        return (email, name, email, "account")
+
     h = request.headers
     h_id = (h.get(_ID_HEADER) or "").strip()
     h_name = (h.get(_NAME_HEADER) or "").strip()

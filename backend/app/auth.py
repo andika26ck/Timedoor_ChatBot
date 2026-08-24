@@ -48,11 +48,15 @@ def _sign(signing_input: bytes) -> str:
     return _b64e(sig)
 
 
-def create_access_token(username: str, role: str = "admin") -> str:
+def create_access_token(
+    username: str, role: str = "admin", name: str | None = None
+) -> str:
     now = int(time.time())
     exp = now + int(settings.auth_token_expire_minutes) * 60
     header = {"alg": _ALG, "typ": "JWT"}
     payload = {"sub": username, "role": role, "iat": now, "exp": exp}
+    if name:
+        payload["name"] = name
     h = _b64e(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     p = _b64e(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signing_input = f"{h}.{p}".encode("ascii")
@@ -100,15 +104,24 @@ def current_user(request: Request) -> dict | None:
     payload = decode_token(token)
     if not payload:
         return None
-    return {"username": payload.get("sub"), "role": payload.get("role", "admin")}
+    return {
+        "username": payload.get("sub"),
+        "role": payload.get("role", "admin"),
+        "name": payload.get("name"),
+    }
 
 
 def require_admin(request: Request) -> dict:
-    """Dependency FastAPI: 401 bila tidak ada sesi admin yang valid."""
+    """Dependency FastAPI: 401 bila belum login, 403 bila login tapi bukan admin."""
     user = current_user(request)
     if not user:
         raise HTTPException(
             status_code=401,
             detail="Sesi tidak valid atau kedaluwarsa. Silakan login lagi.",
+        )
+    if user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Akun ini tidak punya akses admin.",
         )
     return user

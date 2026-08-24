@@ -40,6 +40,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     try {
       const me = await fetchMe();
+      if (me.role !== "admin") {
+        setStatus("anon");
+        return;
+      }
       setUser(me);
       setStatus("authed");
     } catch {
@@ -101,6 +105,11 @@ function LoginForm({ onSuccess }: { onSuccess: (u: AdminUser) => void }) {
     setBusy(true);
     try {
       const u = await apiLogin(username.trim(), password);
+      if (u.role !== "admin") {
+        apiLogout();
+        setError("Akun ini tidak punya akses admin.");
+        return;
+      }
       onSuccess(u);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal login.");

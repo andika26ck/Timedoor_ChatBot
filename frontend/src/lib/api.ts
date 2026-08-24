@@ -219,11 +219,28 @@ export interface AdminUser {
   username: string;
   role: string;
   created_at?: string | null;
+  name?: string | null;
 }
 
 /** Login admin: simpan token bila berhasil, kembalikan info user. */
 export async function login(username: string, password: string): Promise<AdminUser> {
   const res = await fetch(`${getApiUrl()}/auth/login`, json("POST", { username, password }));
+  if (!res.ok) throw new Error(await readError(res));
+  const data = (await res.json()) as { access_token: string; user: AdminUser };
+  setToken(data.access_token);
+  return data.user;
+}
+
+/** Registrasi mandiri end-user chatbot (role="user"): simpan token bila berhasil. */
+export async function registerUser(
+  name: string,
+  email: string,
+  password: string,
+): Promise<AdminUser> {
+  const res = await fetch(
+    `${getApiUrl()}/auth/register`,
+    json("POST", { name, email, password }),
+  );
   if (!res.ok) throw new Error(await readError(res));
   const data = (await res.json()) as { access_token: string; user: AdminUser };
   setToken(data.access_token);

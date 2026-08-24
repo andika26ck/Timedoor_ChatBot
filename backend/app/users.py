@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import threading
 from datetime import datetime, timezone
 
@@ -30,6 +31,8 @@ logger = logging.getLogger("faq-bot")
 _TABLE = os.getenv("AUTH_USERS_TABLE", "app_users")
 
 _PBKDF2_ITERS = 200_000
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Satu koneksi dipakai bersama, dijaga lock (FastAPI menjalankan endpoint
 # sinkron di threadpool; koneksi psycopg tidak aman dipakai lintas thread).
@@ -63,6 +66,7 @@ def _connect():
         )
         """
     )
+    conn.execute(f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS name TEXT")
     return conn
 
 
@@ -132,7 +136,7 @@ def get_user(username: str) -> dict | None:
 
     def op(conn):
         cur = conn.execute(
-            f"SELECT username, password_hash, role, created_at "
+            f"SELECT username, password_hash, role, created_at, name "
             f"FROM {_TABLE} WHERE username = %s",
             (uname,),
         )
@@ -146,6 +150,7 @@ def get_user(username: str) -> dict | None:
         "password_hash": row[1],
         "role": row[2],
         "created_at": row[3],
+        "name": row[4],
     }
 
 
@@ -154,12 +159,13 @@ def list_users() -> list[dict]:
 
     def op(conn):
         cur = conn.execute(
-            f"SELECT username, role, created_at FROM {_TABLE} ORDER BY username"
+            f"SELECT username, role, created_at, name FROM {_TABLE} ORDER BY username"
         )
         return cur.fetchall()
 
     return [
-        {"username": r[0], "role": r[1], "created_at": r[2]} for r in _run(op)
+        {"username": r[0], "role": r[1], "created_at": r[2], "name": r[3]}
+        for r in _run(op)
     ]
 
 
@@ -171,7 +177,9 @@ def count_users() -> int:
     return int(_run(op))
 
 
-def create_user(username: str, password: str, role: str = "admin") -> dict:
+def create_user(
+    username: str, password: str, role: str = "admin", name: str | None = None
+) -> dict:
     """Buat user baru. Jika username sudah ada, password & role diperbarui."""
     uname = _norm(username)
     if not uname:
@@ -179,21 +187,52 @@ def create_user(username: str, password: str, role: str = "admin") -> dict:
     if len(password or "") < 6:
         raise ValueError("Password minimal 6 karakter.")
     role = (role or "admin").strip() or "admin"
+    name = (name or "").strip() or None
     pwd_hash = hash_password(password)
     created = datetime.now(timezone.utc).isoformat()
 
     def op(conn):
         conn.execute(
-            f"""INSERT INTO {_TABLE} (username, password_hash, role, created_at)
-                VALUES (%s, %s, %s, %s)
+            f"""INSERT INTO {_TABLE} (username, password_hash, role, created_at, name)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (username) DO UPDATE
                   SET password_hash = EXCLUDED.password_hash,
-                      role = EXCLUDED.role""",
-            (uname, pwd_hash, role, created),
+                      role = EXCLUDED.role,
+                      name = EXCLUDED.name""",
+            (uname, pwd_hash, role, created, name),
         )
 
     _run(op)
-    return {"username": uname, "role": role, "created_at": created}
+    return {"username": uname, "role": role, "created_at": created, "name": name}
+
+
+def register_user(email: str, password: str, name: str | None = None) -> dict:
+    """Registrasi mandiri end-user (role='user').
+
+    Berbeda dari create_user: TIDAK menimpa akun yang sudah ada. Bila email
+    sudah terdaftar, lempar ValueError. Email dipakai sebagai username.
+    """
+    uname = _norm(email)
+    if not uname or not _EMAIL_RE.match(uname):
+        raise ValueError("Email tidak valid.")
+    if len(password or "") < 6:
+        raise ValueError("Password minimal 6 karakter.")
+    display = (name or "").strip() or None
+    pwd_hash = hash_password(password)
+    created = datetime.now(timezone.utc).isoformat()
+
+    def op(conn):
+        cur = conn.execute(
+            f"""INSERT INTO {_TABLE} (username, password_hash, role, created_at, name)
+                VALUES (%s, %s, 'user', %s, %s)
+                ON CONFLICT (username) DO NOTHING""",
+            (uname, pwd_hash, created, display),
+        )
+        return cur.rowcount
+
+    if int(_run(op)) == 0:
+        raise ValueError("Email sudah terdaftar. Silakan login.")
+    return {"username": uname, "role": "user", "created_at": created, "name": display}
 
 
 def set_password(username: str, password: str) -> bool:
@@ -232,7 +271,11 @@ def authenticate(username: str, password: str) -> dict | None:
         return None
     if not verify_password(password or "", user["password_hash"]):
         return None
-    return {"username": user["username"], "role": user["role"]}
+    return {
+        "username": user["username"],
+        "role": user["role"],
+        "name": user.get("name"),
+    }
 
 
 def ensure_seed_admin() -> None:

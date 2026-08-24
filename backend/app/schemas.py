@@ -405,10 +405,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    name: str = ""
+    email: str
+    password: str
+
+
 class UserInfo(BaseModel):
     username: str
     role: str = "admin"
     created_at: str | None = None
+    name: str | None = None
 
 
 class LoginResponse(BaseModel):
