@@ -304,7 +304,13 @@ def delete_session(session_id: str) -> int:
 
 
 def purge_old(days: int = 60) -> int:
-    """Hapus permanen percakapan yang lebih tua dari `days` hari (retensi).
+    """Hapus permanen SESI percakapan yang idle lebih dari `days` hari.
+
+    Retensi dihitung PER SESI berdasarkan aktivitas TERAKHIR sesi itu
+    (MAX(created_at)). Jadi selama user masih bertanya lagi sebelum `days`
+    hari, SELURUH sesi tetap tersimpan (timer ter-reset ke prompt terakhir).
+    Sebuah sesi baru terhapus permanen kalau tidak ada pesan baru selama
+    `days` hari penuh sejak pesan terakhirnya.
 
     Dipanggil best-effort tiap kali daftar sesi dimuat, sehingga data lama
     otomatis hilang tanpa perlu penjadwal terpisah.
@@ -314,7 +320,12 @@ def purge_old(days: int = 60) -> int:
     def op(conn):
         cur = conn.execute(
             f"DELETE FROM {_TABLE} "
-            f"WHERE created_at < now() - make_interval(days => %s)",
+            f"WHERE session_id IN ("
+            f"    SELECT session_id FROM {_TABLE} "
+            f"    WHERE session_id IS NOT NULL AND session_id <> '' "
+            f"    GROUP BY session_id "
+            f"    HAVING MAX(created_at) < now() - make_interval(days => %s)"
+            f")",
             (days,),
         )
         return cur.rowcount
