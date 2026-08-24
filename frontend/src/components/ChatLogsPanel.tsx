@@ -32,6 +32,44 @@ function shortId(id: string): string {
   return id.length <= 12 ? id : `${id.slice(0, 8)}\u2026`;
 }
 
+/** Meta warna + label untuk badge asal percakapan. */
+const CHANNEL_META: Record<string, { label: string; cls: string }> = {
+  web: {
+    label: "Web",
+    cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+  },
+  cms: {
+    label: "CMS",
+    cls: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300",
+  },
+  embed: {
+    label: "Embed",
+    cls: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300",
+  },
+};
+
+/** Badge kecil penanda asal percakapan (Web / CMS / Embed / tak diketahui). */
+function ChannelBadge({ channel }: { channel?: string }) {
+  const meta = channel ? CHANNEL_META[channel] : undefined;
+  if (!meta) {
+    return (
+      <span
+        title="Asal tidak diketahui"
+        className="inline-block rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 dark:border-night-600 dark:bg-night-800 dark:text-brand-200/60"
+      >
+        ?
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 /** Modal detail: menampilkan seluruh percakapan dalam satu sesi. */
 function SessionModal({
   sessionId,
@@ -61,6 +99,14 @@ function SessionModal({
             <p className="truncate font-mono text-xs text-slate-400 dark:text-brand-200/60">
               {sessionId}
             </p>
+            {(() => {
+              const ch = messages.find((m) => m.channel)?.channel;
+              return ch ? (
+                <div className="mt-1">
+                  <ChannelBadge channel={ch} />
+                </div>
+              ) : null;
+            })()}
           </div>
           <button
             onClick={onClose}
@@ -117,6 +163,7 @@ export function ChatLogsPanel() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ChatLogMessage[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [channelFilter, setChannelFilter] = useState<string>("");
 
   async function load() {
     setLoading(true);
@@ -164,7 +211,10 @@ export function ChatLogsPanel() {
     }
   }
 
-  const totalQuestions = sessions.reduce((n, s) => n + s.questions, 0);
+  const filtered = channelFilter
+    ? sessions.filter((s) => (s.channel || "") === channelFilter)
+    : sessions;
+  const totalQuestions = filtered.reduce((n, s) => n + s.questions, 0);
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
@@ -178,15 +228,28 @@ export function ChatLogsPanel() {
               seluruh percakapan. Percakapan otomatis terhapus permanen setelah 60 hari.
             </p>
           </div>
-          <button type="button" onClick={() => void load()} className={GHOST_BTN}>
-            Muat ulang
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <select
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              title="Saring berdasarkan asal percakapan"
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-900 dark:text-brand-100"
+            >
+              <option value="">Semua asal</option>
+              <option value="web">Web</option>
+              <option value="cms">CMS</option>
+              <option value="embed">Embed</option>
+            </select>
+            <button type="button" onClick={() => void load()} className={GHOST_BTN}>
+              Muat ulang
+            </button>
+          </div>
         </div>
 
         {!loading && !error && sessions.length > 0 && (
           <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-brand-200/70">
             <span className={`px-3 py-1 ${CARD}`}>
-              Total sesi: <b className="text-jet-700 dark:text-jet-100">{sessions.length}</b>
+              Total sesi: <b className="text-jet-700 dark:text-jet-100">{filtered.length}</b>
             </span>
             <span className={`px-3 py-1 ${CARD}`}>
               Total pertanyaan: <b className="text-jet-700 dark:text-jet-100">{totalQuestions}</b>
@@ -221,7 +284,7 @@ export function ChatLogsPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
-                  {sessions.map((s) => (
+                  {filtered.map((s) => (
                     <tr key={s.session_id} className="hover:bg-jet-50 dark:hover:bg-night-800/50">
                       <td className="px-4 py-3">
                         {s.user_name || s.user_email ? (
@@ -237,12 +300,18 @@ export function ChatLogsPanel() {
                             <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
                               {shortId(s.session_id)}
                             </div>
+                            <div className="mt-1">
+                              <ChannelBadge channel={s.channel} />
+                            </div>
                           </div>
                         ) : (
                           <div className="min-w-0">
                             <div className="italic text-slate-400 dark:text-brand-200/60">Anonim</div>
                             <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
                               {shortId(s.session_id)}
+                            </div>
+                            <div className="mt-1">
+                              <ChannelBadge channel={s.channel} />
                             </div>
                           </div>
                         )}
@@ -283,7 +352,7 @@ export function ChatLogsPanel() {
             </div>
 
             <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
-              {sessions.map((s) => (
+              {filtered.map((s) => (
                 <li key={s.session_id} className="space-y-2 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <span className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
@@ -310,6 +379,7 @@ export function ChatLogsPanel() {
                     <span className="font-medium text-jet-600 dark:text-brand-100">
                       {s.user_name || s.user_email || "Anonim"}
                     </span>
+                    <ChannelBadge channel={s.channel} />
                     <span className="font-mono">· {shortId(s.session_id)}</span>
                     <span>· {s.questions} tanya</span>
                     <span>· {fmt(s.last_at)}</span>

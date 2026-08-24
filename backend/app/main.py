@@ -452,6 +452,35 @@ def _identity_fields(
     return (None, None, None, None)
 
 
+def _channel(request: Request, source: str | None) -> str | None:
+    """Tentukan ASAL percakapan untuk log: "cms", "web", atau "embed".
+
+    Penanda paling andal adalah nama konsumen API (dari X-API-Key):
+      - key CMS (mis. "cms-server")            -> "cms"
+      - key widget publik / global ("widget-*") -> "web"
+    Bila tanpa API key (mis. admin/login langsung di web), pakai `source`
+    identitas: proxy->cms, account->web, embed->embed. Kosong = tak diketahui.
+    """
+    consumer = (getattr(request.state, "api_consumer", None) or "").strip().lower()
+    if consumer:
+        if "cms" in consumer:
+            return "cms"
+        if (
+            consumer == "global"
+            or "widget" in consumer
+            or "web" in consumer
+            or "public" in consumer
+        ):
+            return "web"
+    if source == "proxy":
+        return "cms"
+    if source == "account":
+        return "web"
+    if source == "embed":
+        return "embed"
+    return None
+
+
 def _log_chat(
     req: AskRequest, question: str, answer: str, request: Request
 ) -> None:
@@ -463,14 +492,15 @@ def _log_chat(
     """
     sid = (req.session_id or "").strip()
     uid, uname, uemail, usrc = _identity_fields(request, req)
+    chan = _channel(request, usrc)
     chatlog.log_message(
         sid, "user", question, req.domain, req.topic,
-        user_id=uid, user_name=uname, user_email=uemail, source=usrc,
+        user_id=uid, user_name=uname, user_email=uemail, source=usrc, channel=chan,
     )
     if (answer or "").strip():
         chatlog.log_message(
             sid, "assistant", answer, req.domain, req.topic,
-            user_id=uid, user_name=uname, user_email=uemail, source=usrc,
+            user_id=uid, user_name=uname, user_email=uemail, source=usrc, channel=chan,
         )
 
 

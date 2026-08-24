@@ -124,6 +124,8 @@ class ChatLogMessage(BaseModel):
     domain: str = ""
     topic: str = ""
     created_at: str = ""
+    # Asal percakapan: "web" | "cms" | "embed" | "" (tak diketahui).
+    channel: str = ""
 
 
 class ChatSessionSummary(BaseModel):
@@ -143,6 +145,8 @@ class ChatSessionSummary(BaseModel):
     user_id: str = ""
     user_name: str = ""
     user_email: str = ""
+    # Asal percakapan: "web" | "cms" | "embed" | "" (tak diketahui).
+    channel: str = ""
 
 
 class AuditEvent(BaseModel):

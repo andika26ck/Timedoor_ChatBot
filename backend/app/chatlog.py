@@ -67,7 +67,7 @@ def _connect():
     )
     # Migrasi kolom identitas (sesi non-anonim). Nullable + IF NOT EXISTS,
     # sehingga aman dijalankan berulang dan tidak mengganggu baris lama.
-    for _col in ("user_id", "user_name", "user_email", "source"):
+    for _col in ("user_id", "user_name", "user_email", "source", "channel"):
         conn.execute(f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS {_col} TEXT")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS {_TABLE}_user_idx ON {_TABLE} (user_id)"
@@ -121,11 +121,15 @@ def log_message(
     user_name: str | None = None,
     user_email: str | None = None,
     source: str | None = None,
+    channel: str | None = None,
 ) -> None:
     """Catat satu giliran chat. BEST-EFFORT: kegagalan TIDAK mengganggu chat.
 
     user_id/user_name/user_email/source terisi bila user login lewat CMS
     (token identitas valid). Kosong = percakapan anonim (perilaku lama).
+
+    channel = ASAL percakapan ("web" / "cms" / "embed"), diturunkan dari
+    konsumen API + source. Dipakai untuk badge/filter di Riwayat Pengguna.
     """
     sid = (session_id or "").strip() or "anon"
     role = (role or "").strip().lower()
@@ -138,8 +142,8 @@ def log_message(
             f"""
             INSERT INTO {_TABLE}
                 (id, session_id, role, text, domain, topic,
-                 user_id, user_name, user_email, source)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 user_id, user_name, user_email, source, channel)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 uuid.uuid4().hex,
@@ -152,6 +156,7 @@ def log_message(
                 (user_name or "").strip() or None,
                 (user_email or "").strip() or None,
                 (source or "").strip() or None,
+                (channel or "").strip() or None,
             ),
         )
 
@@ -202,7 +207,9 @@ def list_sessions(
                 (ARRAY_AGG(user_email ORDER BY created_at DESC)
                     FILTER (WHERE user_email IS NOT NULL))[1] AS user_email,
                 (ARRAY_AGG(user_id ORDER BY created_at DESC)
-                    FILTER (WHERE user_id IS NOT NULL))[1]    AS user_id
+                    FILTER (WHERE user_id IS NOT NULL))[1]    AS user_id,
+                (ARRAY_AGG(channel ORDER BY created_at DESC)
+                    FILTER (WHERE channel IS NOT NULL))[1]    AS channel
             FROM {_TABLE}
             {clause}
             GROUP BY session_id
@@ -227,6 +234,7 @@ def list_sessions(
                     "user_id": d.get("user_id") or "",
                     "user_name": d.get("user_name") or "",
                     "user_email": d.get("user_email") or "",
+                    "channel": d.get("channel") or "",
                 }
             )
         return out
@@ -243,7 +251,7 @@ def get_session(session_id: str) -> list[dict]:
     def op(conn):
         cur = conn.execute(
             f"""
-            SELECT role, text, domain, topic, created_at
+            SELECT role, text, domain, topic, created_at, channel
             FROM {_TABLE}
             WHERE session_id = %s
             ORDER BY created_at ASC
@@ -251,7 +259,7 @@ def get_session(session_id: str) -> list[dict]:
             (sid,),
         )
         out: list[dict] = []
-        for role, text, domain, topic, created_at in cur.fetchall():
+        for role, text, domain, topic, created_at, channel in cur.fetchall():
             out.append(
                 {
                     "role": role,
@@ -259,6 +267,7 @@ def get_session(session_id: str) -> list[dict]:
                     "domain": domain or "",
                     "topic": topic or "",
                     "created_at": _iso(created_at),
+                    "channel": channel or "",
                 }
             )
         return out
