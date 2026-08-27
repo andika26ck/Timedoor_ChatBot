@@ -128,7 +128,7 @@ def log_message(
     user_id/user_name/user_email/source terisi bila user login lewat CMS
     (token identitas valid). Kosong = percakapan anonim (perilaku lama).
 
-    channel = ASAL percakapan ("web" / "cms" / "embed"), diturunkan dari
+    channel = ASAL percakapan ("web" / "cms"), diturunkan dari
     konsumen API + source. Dipakai untuk badge/filter di Riwayat Pengguna.
     """
     sid = (session_id or "").strip() or "anon"
@@ -209,7 +209,9 @@ def list_sessions(
                 (ARRAY_AGG(user_id ORDER BY created_at DESC)
                     FILTER (WHERE user_id IS NOT NULL))[1]    AS user_id,
                 (ARRAY_AGG(channel ORDER BY created_at DESC)
-                    FILTER (WHERE channel IS NOT NULL))[1]    AS channel
+                    FILTER (WHERE channel IS NOT NULL))[1]    AS channel,
+                (ARRAY_AGG(DISTINCT channel)
+                    FILTER (WHERE channel IS NOT NULL))        AS channels
             FROM {_TABLE}
             {clause}
             GROUP BY session_id
@@ -223,6 +225,8 @@ def list_sessions(
         out: list[dict] = []
         for r in rows:
             d = dict(zip(cols, r))
+            _chs = [c for c in (d.get("channels") or []) if c]
+            _chan = "campuran" if len(_chs) > 1 else (d.get("channel") or "")
             out.append(
                 {
                     "session_id": d.get("session_id") or "",
@@ -234,7 +238,8 @@ def list_sessions(
                     "user_id": d.get("user_id") or "",
                     "user_name": d.get("user_name") or "",
                     "user_email": d.get("user_email") or "",
-                    "channel": d.get("channel") or "",
+                    "channel": _chan,
+                    "channels": _chs,
                 }
             )
         return out

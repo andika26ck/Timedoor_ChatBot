@@ -176,8 +176,10 @@ export interface ChatSessionSummary {
   user_id?: string;
   user_name?: string;
   user_email?: string;
-  /** Asal percakapan: "web" | "cms" | "embed" | "" (tak diketahui). */
+  /** Asal percakapan: "web" | "cms" | "campuran" | "" (tak diketahui). */
   channel?: string;
+  /** Daftar channel unik dalam sesi (untuk filter & deteksi "campuran"). */
+  channels?: string[];
 }
 
 /** Satu pesan dalam log percakapan (detail sesi, sisi admin). */
@@ -187,7 +189,7 @@ export interface ChatLogMessage {
   domain?: string;
   topic?: string;
   created_at: string;
-  /** Asal percakapan: "web" | "cms" | "embed" | "" (tak diketahui). */
+  /** Asal percakapan: "web" | "cms" | "" (tak diketahui). */
   channel?: string;
 }
 
