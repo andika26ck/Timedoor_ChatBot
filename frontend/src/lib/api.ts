@@ -635,6 +635,12 @@ export async function getPopularQuestions(limit = 6): Promise<PopularQuestion[]>
   return req<PopularQuestion[]>(`/stats/popular?limit=${limit}`);
 }
 
+/** Reset statistik pertanyaan populer (khusus admin, menu Kelola DB). */
+export async function resetPopularQuestions(): Promise<{ deleted: number }> {
+  if (USE_MOCK) return { deleted: 0 };
+  return req<{ deleted: number }>("/admin/stats/reset", { method: "POST" });
+}
+
 /* --------------------------- Kelola DB (settings) --------------------------- */
 
 export async function getSettings(): Promise<SettingsInfo> {

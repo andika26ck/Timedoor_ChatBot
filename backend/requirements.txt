@@ -1,11 +1,15 @@
-fastapi
-uvicorn[standard]
-google-genai
-pydantic-settings
-python-dotenv
-python-multipart
-pypdf
-python-docx
-numpy
-psycopg[binary]
-pgvector
+# Versi di-pin ke yang teruji di environment ini (hasil dari .venv/venv).
+# Sesuaikan bila perlu upgrade; khususnya google-genai yang API-nya cepat berubah.
+# Catatan: di venv sempat ada dua versi (uvicorn 0.52.3/0.52.4,
+# google-genai 2.18.1/2.19.0); dipilih yang lebih baru.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+google-genai==2.19.0
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+python-multipart==0.0.32
+pypdf==6.16.1
+python-docx==1.2.0
+numpy==2.5.2
+psycopg[binary]==3.3.4
+pgvector==0.5.0

@@ -6,7 +6,7 @@ database aplikasi). Untuk produksi (Railway) pakai DSN publik proxy, mis:
     python manage_api_keys.py create cms-server
 
 Perintah:
-    python manage_api_keys.py create <nama> [--rate N]   # buat key baru
+    python manage_api_keys.py create <nama> [--rate N] [--channel web|cms|embed]
     python manage_api_keys.py list                        # daftar semua key
     python manage_api_keys.py revoke <nama>               # cabut (nonaktif)
     python manage_api_keys.py activate <nama>             # aktifkan lagi
@@ -34,7 +34,8 @@ def main(argv: list[str]) -> int:
             status = "aktif" if k["active"] else "dicabut"
             rl = k.get("rate_limit_per_min") or "-"
             print(
-                f"- {k['name']}  [{status}]  prefix={k['token_prefix']}...  "
+                f"- {k['name']}  [{status}]  channel={k.get('channel') or '-'}  "
+                f"prefix={k['token_prefix']}...  "
                 f"rate/min={rl}  dibuat={k.get('created_at') or '-'}  "
                 f"terakhir_dipakai={k.get('last_used_at') or '-'}"
             )
@@ -52,8 +53,17 @@ def main(argv: list[str]) -> int:
             except (ValueError, IndexError):
                 print("--rate harus diikuti angka, mis. --rate 120")
                 return 2
+        channel = None
+        if "--channel" in argv:
+            try:
+                channel = argv[argv.index("--channel") + 1]
+            except IndexError:
+                print("--channel harus diikuti nilai: web | cms | embed")
+                return 2
         try:
-            res = api_keys.create_key(name, rate_limit_per_min=rate, created_by="cli")
+            res = api_keys.create_key(
+                name, rate_limit_per_min=rate, created_by="cli", channel=channel
+            )
         except ValueError as exc:
             print(f"Gagal: {exc}")
             return 2
@@ -62,6 +72,8 @@ def main(argv: list[str]) -> int:
         print(f"  key  : {res['token']}")
         if res.get("rate_limit_per_min"):
             print(f"  rate : {res['rate_limit_per_min']} permintaan/menit")
+        if res.get("channel"):
+            print(f"  channel : {res['channel']}")
         return 0
 
     if cmd in ("revoke", "activate", "delete"):

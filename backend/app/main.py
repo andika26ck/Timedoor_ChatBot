@@ -178,7 +178,7 @@ async def _resolve_api_key(request: Request) -> dict | None:
     if not key:
         return None
     if settings.public_api_key and hmac.compare_digest(key, settings.public_api_key):
-        return {"name": "global", "rate_limit_per_min": None}
+        return {"name": "global", "rate_limit_per_min": None, "channel": "web"}
     return await run_in_threadpool(api_keys.verify_token, key)
 
 
@@ -205,6 +205,7 @@ async def _guard_consumable(request: Request, call_next):
             )
         consumer_name = info.get("name")
         consumer_limit = info.get("rate_limit_per_min")
+        request.state.api_channel = info.get("channel")
     request.state.api_consumer = consumer_name
 
     limit = (
@@ -459,8 +460,14 @@ def _channel(request: Request, source: str | None) -> str | None:
       - key CMS (mis. "cms-server")            -> "cms"
       - key widget publik / global ("widget-*") -> "web"
     Bila tanpa API key (mis. admin/login langsung di web), pakai `source`
-    identitas: proxy->cms, account->web, embed->embed. Kosong = tak diketahui.
+    identitas: proxy->cms, account->web, embed->embed. Default: web.
     """
+    # 1. Channel EKSPLISIT dari API key (kolom channel di tabel api_keys) -
+    #    paling andal, tidak menebak dari nama.
+    explicit = (getattr(request.state, "api_channel", None) or "").strip().lower()
+    if explicit in ("web", "cms", "embed"):
+        return explicit
+    # 2. Heuristik nama konsumen (fallback untuk key lama tanpa channel).
     consumer = (getattr(request.state, "api_consumer", None) or "").strip().lower()
     if consumer:
         if "cms" in consumer:
@@ -472,13 +479,15 @@ def _channel(request: Request, source: str | None) -> str | None:
             or "public" in consumer
         ):
             return "web"
+    # 3. Dari source identitas.
     if source == "proxy":
         return "cms"
     if source == "account":
         return "web"
     if source == "embed":
         return "embed"
-    return None
+    # 4. Default: trafik browser langsung tanpa proxy = web chatbot standalone.
+    return "web"
 
 
 def _log_chat(
@@ -1202,7 +1211,26 @@ def delete_template(template_id: str):
 
 @app.get("/stats/popular", response_model=list[PopularQuestion])
 def popular_questions(limit: int = 6):
+    # Ambang minimal + seed diatur di stats_store.popular().
     return stats_store.popular(limit)
+
+
+@app.post("/admin/stats/reset")
+def reset_stats_endpoint(request: Request) -> dict:
+    """Kosongkan statistik pertanyaan populer (khusus admin, menu Kelola DB).
+
+    Path diawali /admin sehingga otomatis dijaga middleware auth admin
+    (berbeda dari GET /stats/popular yang publik untuk empty-state chat).
+    """
+    before = len(stats_store.raw())
+    stats_store.clear()
+    audit.record(
+        _actor(request),
+        "stats.reset",
+        target="Statistik pertanyaan populer",
+        details={"deleted": before},
+    )
+    return {"deleted": before}
 
 
 # --------------------------- Kelola DB (settings) ---------------------------

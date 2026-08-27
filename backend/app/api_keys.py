@@ -70,6 +70,8 @@ def _connect():
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS {_TABLE}_token_hash_idx ON {_TABLE} (token_hash)"
     )
+    # Migrasi: tambah kolom channel untuk tabel yang sudah ada sebelum fitur ini.
+    conn.execute(f"ALTER TABLE {_TABLE} ADD COLUMN IF NOT EXISTS channel TEXT")
     return conn
 
 
@@ -101,6 +103,15 @@ def _norm(name: str) -> str:
     return (name or "").strip().lower()
 
 
+# Nilai channel yang sah untuk penanda asal percakapan.
+_VALID_CHANNELS = {"web", "cms", "embed"}
+
+
+def _norm_channel(channel):
+    ch = (channel or "").strip().lower()
+    return ch if ch in _VALID_CHANNELS else None
+
+
 def generate_token() -> str:
     return _TOKEN_PREFIX + secrets.token_urlsafe(32)
 
@@ -109,11 +120,14 @@ def hash_token(token: str) -> str:
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
 
 
-def create_key(name: str, rate_limit_per_min=None, created_by: str = "") -> dict:
+def create_key(
+    name: str, rate_limit_per_min=None, created_by: str = "", channel=None
+) -> dict:
     """Buat API key baru. Return dict berisi 'token' ASLI (tampil sekali saja)."""
     nm = _norm(name)
     if not nm:
         raise ValueError("Nama konsumen tidak boleh kosong.")
+    ch = _norm_channel(channel)
     token = generate_token()
     token_hash = hash_token(token)
     prefix = token[: len(_TOKEN_PREFIX) + 6]
@@ -124,10 +138,10 @@ def create_key(name: str, rate_limit_per_min=None, created_by: str = "") -> dict
         cur = conn.execute(
             f"""INSERT INTO {_TABLE}
                   (name, token_prefix, token_hash, active, rate_limit_per_min,
-                   created_at, created_by)
-                VALUES (%s, %s, %s, TRUE, %s, %s, %s)
+                   created_at, created_by, channel)
+                VALUES (%s, %s, %s, TRUE, %s, %s, %s, %s)
                 ON CONFLICT (name) DO NOTHING""",
-            (nm, prefix, token_hash, rate, created, (created_by or "").strip()),
+            (nm, prefix, token_hash, rate, created, (created_by or "").strip(), ch),
         )
         return cur.rowcount
 
@@ -141,6 +155,7 @@ def create_key(name: str, rate_limit_per_min=None, created_by: str = "") -> dict
         "token_prefix": prefix,
         "rate_limit_per_min": rate,
         "created_at": created,
+        "channel": ch,
     }
 
 
@@ -148,7 +163,7 @@ def list_keys() -> list[dict]:
     def op(conn):
         cur = conn.execute(
             f"""SELECT name, token_prefix, active, rate_limit_per_min,
-                       created_at, created_by, last_used_at
+                       created_at, created_by, last_used_at, channel
                 FROM {_TABLE} ORDER BY name"""
         )
         return cur.fetchall()
@@ -162,6 +177,7 @@ def list_keys() -> list[dict]:
             "created_at": r[4],
             "created_by": r[5],
             "last_used_at": r[6],
+            "channel": r[7],
         }
         for r in _run(op)
     ]
@@ -176,7 +192,7 @@ def verify_token(token: str) -> dict | None:
 
     def op(conn):
         cur = conn.execute(
-            f"""SELECT name, rate_limit_per_min FROM {_TABLE}
+            f"""SELECT name, rate_limit_per_min, channel FROM {_TABLE}
                 WHERE token_hash = %s AND active = TRUE""",
             (th,),
         )
@@ -197,7 +213,7 @@ def verify_token(token: str) -> dict | None:
         _run(upd)
     except Exception:  # noqa: BLE001
         pass
-    return {"name": row[0], "rate_limit_per_min": row[1]}
+    return {"name": row[0], "rate_limit_per_min": row[1], "channel": row[2]}
 
 
 def revoke_key(name: str) -> bool:

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getSettings,
   listModels,
+  resetPopularQuestions,
   updateSettings,
   type ModelOption,
   type SettingsInfo,
@@ -100,6 +101,11 @@ export function SettingsPanel() {
   const [modelBusy, setModelBusy] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<string | null>(null);
+
+  // --- statistik "Sering ditanyakan" ---
+  const [statsBusy, setStatsBusy] = useState(false);
+  const [statsStatus, setStatsStatus] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   function applyInfo(s: SettingsInfo) {
     setInfo(s);
@@ -203,6 +209,28 @@ export function SettingsPanel() {
       setModelError(errMsg(e));
     } finally {
       setModelBusy(false);
+    }
+  }
+
+  async function onResetStats() {
+    if (statsBusy) return;
+    if (
+      !window.confirm(
+        "Kosongkan semua statistik pertanyaan populer? Tindakan ini tidak bisa dibatalkan."
+      )
+    ) {
+      return;
+    }
+    setStatsBusy(true);
+    setStatsError(null);
+    setStatsStatus(null);
+    try {
+      const { deleted } = await resetPopularQuestions();
+      setStatsStatus(`Statistik dikosongkan (${deleted} entri dihapus).`);
+    } catch (e) {
+      setStatsError(errMsg(e));
+    } finally {
+      setStatsBusy(false);
     }
   }
 
@@ -340,6 +368,35 @@ export function SettingsPanel() {
                 <p className="mt-3 text-sm text-blush dark:text-blush-400">{modelError}</p>
               )}
             </>
+          )}
+        </section>
+
+        <section className={`p-4 sm:p-6 ${CARD}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-navy dark:text-jet-100">
+                Statistik "Sering ditanyakan"
+              </h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
+                Daftar pertanyaan populer di empty-state chat dihitung otomatis dari
+                pertanyaan yang masuk. Reset untuk mengosongkan hitungan (mis. setelah
+                fase uji coba) dan mulai dari nol.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onResetStats()}
+              disabled={statsBusy}
+              className={SECONDARY_BTN}
+            >
+              {statsBusy ? "Mengosongkan..." : "Reset statistik"}
+            </button>
+          </div>
+          {statsStatus && (
+            <p className="mt-3 text-sm text-brand-700 dark:text-brand-300">{statsStatus}</p>
+          )}
+          {statsError && (
+            <p className="mt-3 text-sm text-blush dark:text-blush-400">{statsError}</p>
           )}
         </section>
 

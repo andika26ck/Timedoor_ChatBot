@@ -72,8 +72,9 @@ Tempel snippet ini di layout/halaman CMS tempat chat ingin muncul:
 **PENTING:**
 
 - `data-api-url` **HARUS menunjuk ke endpoint proxy milik CMS** (Langkah 2),
-  BUKAN langsung ke Railway. Widget akan memanggil `<data-api-url>/ask` dan
-  `<data-api-url>/ask/stream`.
+  BUKAN langsung ke Railway. Widget memanggil beberapa endpoint relatif:
+  `/ask`, `/ask/stream`, `/taxonomy`, `/stats/popular`, dan `/feedback` — jadi
+  proxy WAJIB meneruskan SEMUANYA (lihat Langkah 2), bukan hanya `/ask`.
 - **JANGAN** mengisi `data-api-key` atau `data-user-*` di snippet ini. Atribut
   itu adalah jalur "embed" yang **membocorkan key** ke browser dan **bisa
   dipalsukan**. Identitas & API key disuntikkan di server pada Langkah 2.
@@ -84,8 +85,10 @@ Tempel snippet ini di layout/halaman CMS tempat chat ingin muncul:
 
 Tugas proxy:
 
-1. Menerima request dari widget pada path `/ask` dan `/ask/stream`
-   (relatif terhadap `data-api-url`).
+1. Menerima request dari widget pada endpoint publik (relatif terhadap
+   `data-api-url`): `POST /ask`, `POST /ask/stream`, `GET /taxonomy`,
+   `GET /stats/popular`, `POST /feedback`. Endpoint lain WAJIB ditolak
+   (allowlist) supaya API key tak bisa dipakai menembak endpoint admin.
 2. Mengambil identitas user dari **session login CMS**.
 3. Meneruskan ke `CHATBOT_API_BASE` sambil menambahkan header:
    `X-API-Key`, `X-User-Id`, `X-User-Name`, `X-User-Email`, `X-Proxy-Secret`.
@@ -107,24 +110,39 @@ $USER_ID    = $_SESSION['user_email'] ?? '';
 $USER_NAME  = $_SESSION['user_name']  ?? '';
 $USER_EMAIL = $_SESSION['user_email'] ?? '';
 
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH); // /ask atau /ask/stream
-if (!in_array($path, ['/ask', '/ask/stream'], true)) { http_response_code(404); exit; }
+// Allowlist endpoint publik yang dipakai widget + method-nya.
+$ALLOWED = [
+  '/ask'           => ['POST'],
+  '/ask/stream'    => ['POST'],
+  '/taxonomy'      => ['GET'],   // isi dropdown domain/topik
+  '/stats/popular' => ['GET'],   // daftar "Sering ditanyakan"
+  '/feedback'      => ['POST'],  // tombol suka / tidak suka
+];
+$method = $_SERVER['REQUEST_METHOD'];
+$path   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH); // relatif thd data-api-url
+$query  = $_SERVER['QUERY_STRING'] ?? '';
+if ($method === 'OPTIONS') { http_response_code(204); exit; }
+if (!isset($ALLOWED[$path])) { http_response_code(404); exit; }
+if (!in_array($method, $ALLOWED[$path], true)) { http_response_code(405); exit; }
 $isStream = ($path === '/ask/stream');
 
-$body = file_get_contents('php://input');
-$ch = curl_init($CHATBOT_BASE . $path);
+$hasBody = in_array($method, ['POST', 'PUT', 'PATCH'], true);
+$body = $hasBody ? file_get_contents('php://input') : null;
+$headers = [
+  'X-API-Key: ' . $API_KEY,
+  'X-User-Id: ' . $USER_ID,
+  'X-User-Name: ' . $USER_NAME,
+  'X-User-Email: ' . $USER_EMAIL,
+  'X-Proxy-Secret: ' . $PROXY_SECRET,
+];
+if ($hasBody) { $headers[] = 'Content-Type: application/json'; }
+
+$ch = curl_init($CHATBOT_BASE . $path . ($query !== '' ? ('?' . $query) : ''));
 curl_setopt_array($ch, [
-  CURLOPT_POST       => true,
-  CURLOPT_POSTFIELDS => $body,
-  CURLOPT_HTTPHEADER => [
-    'Content-Type: application/json',
-    'X-API-Key: ' . $API_KEY,
-    'X-User-Id: ' . $USER_ID,
-    'X-User-Name: ' . $USER_NAME,
-    'X-User-Email: ' . $USER_EMAIL,
-    'X-Proxy-Secret: ' . $PROXY_SECRET,
-  ],
+  CURLOPT_CUSTOMREQUEST => $method,
+  CURLOPT_HTTPHEADER    => $headers,
 ]);
+if ($hasBody) { curl_setopt($ch, CURLOPT_POSTFIELDS, $body); }
 
 if ($isStream) {
   header('Content-Type: text/event-stream');
@@ -155,22 +173,45 @@ const BASE = process.env.CHATBOT_API_BASE;
 const API_KEY = process.env.CHATBOT_API_KEY;
 const PROXY_SECRET = process.env.IDENTITY_PROXY_SECRET;
 
-app.use("/cobee-proxy/:path(ask|ask/stream)", express.raw({ type: "*/*" }), async (req, res) => {
+// Allowlist endpoint publik yang dipakai widget + method-nya.
+const ALLOWED = {
+  "/ask": ["POST"],
+  "/ask/stream": ["POST"],
+  "/taxonomy": ["GET"],          // isi dropdown domain/topik
+  "/stats/popular": ["GET"],     // daftar "Sering ditanyakan"
+  "/feedback": ["POST"],         // tombol suka / tidak suka
+};
+// Header hop-by-hop / encoding jangan di-relay (cegah dobel-encoding).
+const STRIP = new Set([
+  "content-encoding", "content-length", "transfer-encoding", "connection",
+]);
+
+app.use("/cobee-proxy", express.raw({ type: "*/*" }), async (req, res) => {
+  const path = req.path.replace(/\/+$/, "") || "/";
+  const methods = ALLOWED[path];
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (!methods) return res.sendStatus(404);
+  if (!methods.includes(req.method)) return res.sendStatus(405);
+
   const user = req.session?.user ?? {}; // dari session login CMS
-  const upstream = await fetch(`${BASE}/${req.params.path}`, {
-    method: "POST",
+  const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+  const qs = req.originalUrl.includes("?") ? "?" + req.originalUrl.split("?")[1] : "";
+  const upstream = await fetch(`${BASE}${path}${qs}`, {
+    method: req.method,
     headers: {
-      "Content-Type": "application/json",
       "X-API-Key": API_KEY,
       "X-User-Id": user.email ?? "",
       "X-User-Name": user.name ?? "",
       "X-User-Email": user.email ?? "",
       "X-Proxy-Secret": PROXY_SECRET,
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
     },
-    body: req.body,
+    body: hasBody ? req.body : undefined,
   });
   res.status(upstream.status);
-  upstream.headers.forEach((v, k) => res.setHeader(k, v));
+  upstream.headers.forEach((v, k) => {
+    if (!STRIP.has(k.toLowerCase())) res.setHeader(k, v);
+  });
   // Untuk SSE, pipe stream tanpa buffering:
   const reader = upstream.body.getReader();
   for (;;) {
@@ -197,6 +238,9 @@ app.use("/cobee-proxy/:path(ask|ask/stream)", express.raw({ type: "*/*" }), asyn
 - `POST /ask` → respons JSON.
 - `POST /ask/stream` → SSE (`text/event-stream`); tiap baris `data: {json}`
   dengan field `type`: `text` | `citations` | `error` | `done`.
+- `GET /taxonomy` → daftar domain/topik untuk dropdown.
+- `GET /stats/popular?limit=6` → daftar pertanyaan "Sering ditanyakan".
+- `POST /feedback` → kirim rating jawaban (tombol suka / tidak suka).
 - `GET /health` → cek status.
 
 ### Body (JSON)
@@ -244,3 +288,4 @@ app.use("/cobee-proxy/:path(ask|ask/stream)", express.raw({ type: "*/*" }), asyn
 | `429 Too Many Requests` | Kena rate limit | Coba lagi beberapa saat |
 | Tercatat "Anonim" | `X-Proxy-Secret` tidak cocok / tidak dikirim, `X-User-*` kosong, atau `IDENTITY_PROXY_SECRET` beda dengan Railway | Samakan secret di CMS & Railway; pastikan header identitas terisi |
 | Jawaban stream terputus / muncul sekaligus di akhir | Proxy mem-buffer SSE | Matikan buffering (lihat `X-Accel-Buffering: no` + `flush()`) |
+| "Sering ditanyakan" & dropdown domain kosong di CMS | Proxy hanya meneruskan `/ask` & `/ask/stream` | Tambahkan `/taxonomy`, `/stats/popular`, `/feedback` ke allowlist proxy |
