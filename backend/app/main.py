@@ -411,9 +411,9 @@ def _identity_fields(
       1. Header `X-User-*` dari proxy CMS (source="proxy") — paling dipercaya.
          Bila `identity_proxy_secret` diset, header ini hanya diterima kalau
          `X-Proxy-Secret` cocok (mencegah spoof via panggilan langsung ke API).
-      2. Field body `user_*` dari embed (source="embed") — fallback, bisa
-         dipalsukan dari browser, jadi hanya untuk embed langsung tanpa proxy.
-      3. Tidak ada → anonim (semua None).
+      2. Tidak ada → anonim (semua None).
+         (Jalur body `user_*` / "embed" DIHAPUS demi keamanan: identitas dari
+         browser gampang dipalsukan.)
     """
     # 0. Sesi login terverifikasi (JWT) — identitas PALING tepercaya karena
     #    ditandatangani server, bukan dikirim mentah dari browser.
@@ -444,28 +444,25 @@ def _identity_fields(
         else:
             logger.warning("X-User-* diabaikan: X-Proxy-Secret tidak cocok.")
 
-    b_id = (req.user_id or "").strip()
-    b_name = (req.user_name or "").strip()
-    b_email = (req.user_email or "").strip()
-    if b_id or b_name or b_email:
-        return (b_id or None, b_name or None, b_email or None, "embed")
-
+    # Jalur identitas via body (embed) DIHAPUS demi keamanan — identitas dari
+    # browser gampang dipalsukan. Identitas hanya dari login akun (JWT, di atas)
+    # atau proxy CMS tepercaya (X-User-* + X-Proxy-Secret).
     return (None, None, None, None)
 
 
 def _channel(request: Request, source: str | None) -> str | None:
-    """Tentukan ASAL percakapan untuk log: "cms", "web", atau "embed".
+    """Tentukan ASAL percakapan untuk log: "cms" atau "web".
 
     Penanda paling andal adalah nama konsumen API (dari X-API-Key):
       - key CMS (mis. "cms-server")            -> "cms"
       - key widget publik / global ("widget-*") -> "web"
     Bila tanpa API key (mis. admin/login langsung di web), pakai `source`
-    identitas: proxy->cms, account->web, embed->embed. Default: web.
+    identitas: proxy->cms, account->web. Default: web.
     """
     # 1. Channel EKSPLISIT dari API key (kolom channel di tabel api_keys) -
     #    paling andal, tidak menebak dari nama.
     explicit = (getattr(request.state, "api_channel", None) or "").strip().lower()
-    if explicit in ("web", "cms", "embed"):
+    if explicit in ("web", "cms"):
         return explicit
     # 2. Heuristik nama konsumen (fallback untuk key lama tanpa channel).
     consumer = (getattr(request.state, "api_consumer", None) or "").strip().lower()
@@ -484,8 +481,6 @@ def _channel(request: Request, source: str | None) -> str | None:
         return "cms"
     if source == "account":
         return "web"
-    if source == "embed":
-        return "embed"
     # 4. Default: trafik browser langsung tanpa proxy = web chatbot standalone.
     return "web"
 
@@ -495,7 +490,7 @@ def _log_chat(
 ) -> None:
     """Catat percakapan ke log (best-effort) untuk tracking sisi admin.
 
-    Identitas diambil dari header proxy (`X-User-*`) atau field body embed;
+    Identitas diambil dari login akun (JWT) atau header proxy (`X-User-*`);
     kosong = anonim (hanya session_id). Kegagalan pencatatan tidak boleh
     mengganggu jawaban ke user.
     """

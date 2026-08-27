@@ -5,7 +5,6 @@ import EndUserApp from "./EndUserApp";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider } from "./components/ui/Toast";
 import { AuthGate } from "./features/auth/AuthGate";
-import { EndUserAuthGate } from "./features/enduser/EndUserAuthGate";
 import "./index.css";
 
 /*
@@ -28,9 +27,7 @@ createRoot(document.getElementById("root")!).render(
             <App />
           </AuthGate>
         ) : (
-          <EndUserAuthGate>
-            <EndUserApp />
-          </EndUserAuthGate>
+          <EndUserApp />
         )}
       </ToastProvider>
     </ThemeProvider>

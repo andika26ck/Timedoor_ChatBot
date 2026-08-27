@@ -42,13 +42,9 @@ const CHANNEL_META: Record<string, { label: string; cls: string }> = {
     label: "CMS",
     cls: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300",
   },
-  embed: {
-    label: "Embed",
-    cls: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300",
-  },
 };
 
-/** Badge kecil penanda asal percakapan (Web / CMS / Embed / tak diketahui). */
+/** Badge kecil penanda asal percakapan (Web / CMS / tak diketahui). */
 function ChannelBadge({ channel }: { channel?: string }) {
   const meta = channel ? CHANNEL_META[channel] : undefined;
   if (!meta) {
@@ -238,7 +234,6 @@ export function ChatLogsPanel() {
               <option value="">Semua asal</option>
               <option value="web">Web</option>
               <option value="cms">CMS</option>
-              <option value="embed">Embed</option>
             </select>
             <button type="button" onClick={() => void load()} className={GHOST_BTN}>
               Muat ulang

@@ -75,9 +75,10 @@ Tempel snippet ini di layout/halaman CMS tempat chat ingin muncul:
   BUKAN langsung ke Railway. Widget memanggil beberapa endpoint relatif:
   `/ask`, `/ask/stream`, `/taxonomy`, `/stats/popular`, dan `/feedback` — jadi
   proxy WAJIB meneruskan SEMUANYA (lihat Langkah 2), bukan hanya `/ask`.
-- **JANGAN** mengisi `data-api-key` atau `data-user-*` di snippet ini. Atribut
-  itu adalah jalur "embed" yang **membocorkan key** ke browser dan **bisa
-  dipalsukan**. Identitas & API key disuntikkan di server pada Langkah 2.
+- **JANGAN** mengisi `data-api-key` atau `data-user-*` di snippet ini. Jalur
+  identitas via browser (dulu disebut "embed") sudah **DIHAPUS dari chatbot**
+  karena membocorkan key & bisa dipalsukan. Identitas dan API key sekarang
+  HANYA disuntikkan di server pada Langkah 2 (lewat header `X-User-*`).
 
 ---
 
@@ -257,9 +258,10 @@ app.use("/cobee-proxy", express.raw({ type: "*/*" }), async (req, res) => {
 }
 ```
 
-> Catatan: field `user_id` / `user_name` / `user_email` di **body** adalah jalur
-> "embed" (kurang aman, bisa dipalsukan dari browser). Untuk pola proxy,
-> **gunakan HEADER `X-User-*`** dan biarkan field body kosong.
+> Catatan: jalur identitas via **body** (`user_id`/`user_name`/`user_email`) dan
+> channel "embed" sudah **DIHAPUS** dari chatbot demi keamanan. Identitas kini
+> **hanya** diterima lewat HEADER `X-User-*` + `X-Proxy-Secret` (pola proxy ini)
+> atau login akun (JWT); field body identitas diabaikan server.
 
 ---
 
