@@ -8,6 +8,7 @@ import {
 } from "../lib/api";
 import { useAuth } from "../features/auth/AuthGate";
 import { useToast } from "./ui/Toast";
+import { Pagination } from "./ui/Pagination";
 
 /** Token warna dipakai bersama supaya light & dark konsisten dengan brand. */
 const CARD =
@@ -34,6 +35,8 @@ const SECONDARY_BTN =
 const DANGER_BTN =
   "rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition " +
   "hover:bg-red-700 disabled:opacity-40";
+
+const PAGE_SIZE = 10;
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Terjadi kesalahan.";
@@ -104,6 +107,7 @@ export function UsersPanel() {
   // Pencarian & filter.
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [page, setPage] = useState(0);
 
   // Form tambah user.
   const [showAdd, setShowAdd] = useState(false);
@@ -153,6 +157,16 @@ export function UsersPanel() {
       );
     });
   }, [users, query, roleFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = useMemo(
+    () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page],
+  );
+  // Jaga halaman tetap valid saat data menyusut (mis. setelah hapus / filter).
+  useEffect(() => {
+    if (page > 0 && page >= totalPages) setPage(totalPages - 1);
+  }, [page, totalPages]);
 
   async function handleAdd(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -303,15 +317,19 @@ export function UsersPanel() {
             <input
               className={`${FIELD} sm:max-w-xs`}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setPage(0);
+                setQuery(e.target.value);
+              }}
               placeholder="Cari nama atau email…"
             />
             <select
               className={`${FIELD} sm:w-44`}
               value={roleFilter}
-              onChange={(e) =>
-                setRoleFilter(e.target.value as "all" | "admin" | "user")
-              }
+              onChange={(e) => {
+                setPage(0);
+                setRoleFilter(e.target.value as "all" | "admin" | "user");
+              }}
             >
               <option value="all">Semua role</option>
               <option value="admin">Admin</option>
@@ -362,7 +380,7 @@ export function UsersPanel() {
                       </td>
                     </tr>
                   )}
-                  {filtered.map((u) => {
+                  {paged.map((u) => {
                     const isSelf = u.username === me.username;
                     return (
                       <tr
@@ -426,6 +444,12 @@ export function UsersPanel() {
             </div>
           )}
         </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPage={setPage}
+        />
 
         <p className="text-xs text-slate-400 dark:text-brand-200/50">
           Akun <strong>User</strong> hanya bisa memakai chat di halaman utama. Akun{" "}

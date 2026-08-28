@@ -7,6 +7,7 @@ import {
   type ChatSessionSummary,
 } from "../lib/api";
 import { useConfirm } from "./ui/Confirm";
+import { Pagination } from "./ui/Pagination";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -20,6 +21,8 @@ const DANGER_BTN =
   "rounded-lg border px-2.5 py-1 text-xs transition " +
   "border-red-200 text-red-600 hover:bg-red-50 " +
   "dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10";
+
+const PAGE_SIZE = 10;
 
 function fmt(iso: string): string {
   if (!iso) return "-";
@@ -224,6 +227,7 @@ export function ChatLogsPanel() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -316,6 +320,16 @@ export function ChatLogsPanel() {
   const groups = useMemo(() => groupByUser(filtered), [filtered]);
   const totalQuestions = filtered.reduce((n, s) => n + s.questions, 0);
 
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const pagedGroups = useMemo(
+    () => groups.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [groups, page],
+  );
+  // Jaga halaman tetap valid saat data menyusut (mis. setelah hapus / filter).
+  useEffect(() => {
+    if (page > 0 && page >= totalPages) setPage(totalPages - 1);
+  }, [page, totalPages]);
+
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
@@ -331,7 +345,10 @@ export function ChatLogsPanel() {
           <div className="flex shrink-0 items-center gap-2">
             <select
               value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
+              onChange={(e) => {
+                setPage(0);
+                setChannelFilter(e.target.value);
+              }}
               title="Saring berdasarkan asal percakapan"
               className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-900 dark:text-brand-100"
             >
@@ -386,7 +403,7 @@ export function ChatLogsPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
-                  {groups.map((g) => {
+                  {pagedGroups.map((g) => {
                     const isOpen = !!expanded[g.key];
                     const latest = g.sessions[0];
                     return (
@@ -521,7 +538,7 @@ export function ChatLogsPanel() {
             </div>
 
             <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
-              {groups.map((g) => {
+              {pagedGroups.map((g) => {
                 const isOpen = !!expanded[g.key];
                 return (
                   <li key={g.key} className="px-4 py-3">
@@ -607,6 +624,13 @@ export function ChatLogsPanel() {
             </>
           )}
         </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPage={setPage}
+          loading={loading}
+        />
       </div>
 
       {openId && (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { deleteAuditLog, getAuditLogs, type AuditEvent } from "../lib/api";
 import { useConfirm } from "./ui/Confirm";
+import { Pagination } from "./ui/Pagination";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -14,6 +15,8 @@ const DANGER_BTN =
   "rounded-lg border px-2.5 py-1 text-xs transition " +
   "border-red-200 text-red-600 hover:bg-red-50 " +
   "dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10";
+
+const PAGE_SIZE = 10;
 
 function fmt(iso: string): string {
   if (!iso) return "\u2014";
@@ -97,6 +100,7 @@ export function AuditLogPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("");
+  const [page, setPage] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -137,6 +141,16 @@ export function AuditLogPanel() {
     [events, filter],
   );
 
+  const totalPages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const paged = useMemo(
+    () => shown.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [shown, page],
+  );
+  // Jaga halaman tetap valid saat data menyusut (mis. setelah hapus / filter).
+  useEffect(() => {
+    if (page > 0 && page >= totalPages) setPage(totalPages - 1);
+  }, [page, totalPages]);
+
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
@@ -157,7 +171,10 @@ export function AuditLogPanel() {
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setPage(0);
+              setFilter(e.target.value);
+            }}
             title="Saring berdasarkan jenis aksi"
             className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-800 dark:text-brand-100"
           >
@@ -203,7 +220,7 @@ export function AuditLogPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
-                  {shown.map((ev) => {
+                  {paged.map((ev) => {
                     const meta = actionMeta(ev.action);
                     return (
                       <tr key={ev.id} className="hover:bg-jet-50 dark:hover:bg-night-800/50">
@@ -247,7 +264,7 @@ export function AuditLogPanel() {
             </div>
 
             <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
-              {shown.map((ev) => {
+              {paged.map((ev) => {
                 const meta = actionMeta(ev.action);
                 const details = describeDetails(ev);
                 return (
@@ -289,6 +306,13 @@ export function AuditLogPanel() {
             </>
           )}
         </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPage={setPage}
+          loading={loading}
+        />
       </div>
     </div>
   );

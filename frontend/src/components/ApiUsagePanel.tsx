@@ -13,7 +13,7 @@ const SELECT =
   "rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 " +
   "dark:border-night-600 dark:bg-night-800 dark:text-brand-100";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 
 function fmt(iso: string): string {
   if (!iso) return "\u2014";
