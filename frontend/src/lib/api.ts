@@ -6,7 +6,7 @@
  * dialihkan ke data palsu di ./mock supaya UI bisa dites tanpa backend.
  */
 import * as mock from "./mock";
-import { clearToken, getToken, setToken } from "./auth";
+import { clearToken, getToken, isAdminScope, setToken } from "./auth";
 import type {
   ApiUsageResult,
   AskResponse,
@@ -99,11 +99,19 @@ function apiKeyHeader(): Record<string, string> {
  * mengelompokkan percakapan di halaman Riwayat Pengguna. Tidak ada data
  * pribadi — hanya penanda acak yang disimpan di localStorage.
  */
-const SESSION_KEY = "tdc:session-id";
+const SESSION_KEY_BASE = "tdc:session-id";
+/**
+ * Kunci session id dipisah per POV (admin vs end-user) supaya percakapan uji
+ * dari dashboard admin tidak masuk ke sesi/riwayat end-user (dan sebaliknya).
+ */
+function sessionKey(): string {
+  return isAdminScope() ? `${SESSION_KEY_BASE}:admin` : `${SESSION_KEY_BASE}:user`;
+}
 function getSessionId(): string {
   if (typeof window === "undefined") return "anon";
   try {
-    let sid = window.localStorage.getItem(SESSION_KEY);
+    const key = sessionKey();
+    let sid = window.localStorage.getItem(key);
     if (!sid) {
       // Inti tetap acak (UUID) demi keamanan; prefix tanggal hanya untuk
       // keterbacaan/debug. Contoh: sess-2026-08-27-4d33e7e2-...
@@ -112,7 +120,7 @@ function getSessionId(): string {
         Math.random().toString(36).slice(2);
       const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
       sid = `sess-${day}-${rand}`;
-      window.localStorage.setItem(SESSION_KEY, sid);
+      window.localStorage.setItem(key, sid);
     }
     return sid;
   } catch {

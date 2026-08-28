@@ -1,15 +1,30 @@
 /**
- * Penyimpanan token admin di browser (localStorage).
+ * Penyimpanan token autentikasi di browser (localStorage).
  *
  * Token dikirim sebagai header `Authorization: Bearer <token>` untuk semua
- * permintaan ke endpoint admin (lihat lib/api.ts). Hanya dipakai di rute
- * /admin; halaman end-user tidak butuh token.
+ * permintaan (lihat lib/api.ts). Slot token dipisah admin vs end-user
+ * lewat isAdminScope() agar login user biasa tidak menimpa sesi admin.
  */
-const TOKEN_KEY = "tdc:admin-token";
+const ADMIN_TOKEN_KEY = "tdc:admin-token";
+const USER_TOKEN_KEY = "tdc:user-token";
+
+/** True bila kode berjalan di rute dashboard admin ("/admin..."). */
+export function isAdminScope(): boolean {
+  try {
+    return window.location.pathname.startsWith("/admin");
+  } catch {
+    return false;
+  }
+}
+
+/** Kunci token localStorage sesuai POV aktif (admin vs end-user). */
+function tokenKey(): string {
+  return isAdminScope() ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY;
+}
 
 export function getToken(): string | null {
   try {
-    return window.localStorage.getItem(TOKEN_KEY);
+    return window.localStorage.getItem(tokenKey());
   } catch {
     return null;
   }
@@ -17,7 +32,7 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   try {
-    window.localStorage.setItem(TOKEN_KEY, token);
+    window.localStorage.setItem(tokenKey(), token);
   } catch {
     /* localStorage tidak tersedia — abaikan */
   }
@@ -25,7 +40,7 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   try {
-    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(tokenKey());
   } catch {
     /* abaikan */
   }
