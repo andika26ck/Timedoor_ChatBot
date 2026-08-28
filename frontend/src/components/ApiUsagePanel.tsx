@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getApiUsage, type ApiUsageResult } from "../lib/api";
+import { Pagination } from "./ui/Pagination";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -308,31 +309,12 @@ export function ApiUsagePanel() {
         </div>
 
         {/* Pagination */}
-        {totalRows > PAGE_SIZE && (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-slate-500 dark:text-brand-200/70">
-              Halaman {page + 1} dari {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0 || loading}
-                className={GHOST_BTN}
-              >
-                Sebelumnya
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => (p + 1 < totalPages ? p + 1 : p))}
-                disabled={page + 1 >= totalPages || loading}
-                className={GHOST_BTN}
-              >
-                Berikutnya
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPage={setPage}
+          loading={loading}
+        />
       </div>
     </div>
   );

@@ -80,19 +80,30 @@ function badgeClass(kind: "category" | "domain" | "topic" | "source"): string {
 function Badge({
   kind,
   children,
+  onClick,
+  title,
 }: {
   kind: "category" | "domain" | "topic" | "source";
   children: React.ReactNode;
+  onClick?: () => void;
+  title?: string;
 }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badgeClass(
-        kind,
-      )}`}
-    >
-      {children}
-    </span>
-  );
+  const cls = `inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badgeClass(
+    kind,
+  )}`;
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        className={`${cls} cursor-pointer transition hover:brightness-95 dark:hover:brightness-110`}
+      >
+        {children}
+      </button>
+    );
+  }
+  return <span className={cls}>{children}</span>;
 }
 
 /** Modal untuk melihat isi dokumen (fitur Detail). */
@@ -983,7 +994,13 @@ export function DocumentsPanel() {
                                 </Badge>
                               ))}
                               {doc.source_group && (
-                                <Badge kind="source">📄 {doc.source_group}</Badge>
+                                <Badge
+                                  kind="source"
+                                  onClick={() => setGroupFilter(doc.source_group || "")}
+                                  title={`Filter grup: ${doc.source_group}`}
+                                >
+                                  📄 {doc.source_group}
+                                </Badge>
                               )}
                             </div>
                             {doc.summary && (
