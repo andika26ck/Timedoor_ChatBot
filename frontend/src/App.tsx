@@ -23,8 +23,22 @@ const TITLES: Record<View, string> = {
   users: "Kelola User",
 };
 
+const VIEW_STORAGE_KEY = "cobee.admin.view";
+
+// Ingat menu terakhir yang dibuka agar tidak balik ke Chat setiap kali refresh.
+function loadInitialView(): View {
+  if (typeof window === "undefined") return "chat";
+  try {
+    const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved && saved in TITLES) return saved as View;
+  } catch {
+    // localStorage bisa diblokir (mode privasi) — abaikan saja.
+  }
+  return "chat";
+}
+
 export default function App() {
-  const [view, setView] = useState<View>("chat");
+  const [view, setView] = useState<View>(loadInitialView);
   const [navOpen, setNavOpen] = useState(false);
   const { user, logout } = useAuth();
 
@@ -32,6 +46,11 @@ export default function App() {
   function go(v: View) {
     setView(v);
     setNavOpen(false);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, v);
+    } catch {
+      // abaikan bila localStorage tidak tersedia.
+    }
   }
 
   return (
