@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   deleteChatSession,
   getChatSession,
@@ -146,10 +146,71 @@ function SessionModal({
   );
 }
 
+/** Satu akun (atau sesi anonim) hasil pengelompokan Riwayat. */
+interface UserGroup {
+  key: string;
+  name: string;
+  email?: string;
+  anonymous: boolean;
+  sessions: ChatSessionSummary[];
+  questions: number;
+  lastAt: string;
+  channels: string[];
+}
+
+/** Kunci identitas sesi: utamakan user_id, lalu email, lalu nama. */
+function identityKey(s: ChatSessionSummary): string | null {
+  const id = (s.user_id || "").trim().toLowerCase();
+  const email = (s.user_email || "").trim().toLowerCase();
+  const name = (s.user_name || "").trim().toLowerCase();
+  return id || email || name || null;
+}
+
+/** Gabungkan sesi menjadi kelompok per akun (sesi anonim tetap berdiri sendiri). */
+function groupByUser(sessions: ChatSessionSummary[]): UserGroup[] {
+  const map = new Map<string, UserGroup>();
+  for (const s of sessions) {
+    const idKey = identityKey(s);
+    const anonymous = !idKey;
+    const key = idKey ?? `anon:${s.session_id}`;
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        name: s.user_name || s.user_email || "Anonim",
+        email: s.user_name && s.user_email ? s.user_email : undefined,
+        anonymous,
+        sessions: [],
+        questions: 0,
+        lastAt: s.last_at,
+        channels: [],
+      };
+      map.set(key, g);
+    }
+    g.sessions.push(s);
+    g.questions += s.questions;
+    if (!g.lastAt || (s.last_at && s.last_at > g.lastAt)) g.lastAt = s.last_at;
+    const chs = s.channels?.length ? s.channels : s.channel ? [s.channel] : [];
+    for (const c of chs) if (c && !g.channels.includes(c)) g.channels.push(c);
+  }
+  for (const g of map.values()) {
+    g.sessions.sort((a, b) => (b.last_at || "").localeCompare(a.last_at || ""));
+    const latest = g.sessions[0];
+    if (latest && (latest.user_name || latest.user_email)) {
+      g.name = latest.user_name || latest.user_email || g.name;
+      g.email =
+        latest.user_name && latest.user_email ? latest.user_email : undefined;
+    }
+  }
+  return [...map.values()].sort((a, b) =>
+    (b.lastAt || "").localeCompare(a.lastAt || ""),
+  );
+}
+
 /**
- * Riwayat Pengguna (sisi admin): daftar sesi anonim yang memakai chatbot,
- * lengkap dengan kapan terakhir aktif, berapa kali bertanya, dan pertanyaan
- * pertamanya. Klik "Lihat" untuk membaca seluruh percakapan sesi tersebut.
+ * Riwayat Pengguna (sisi admin): daftar percakapan dikelompokkan per akun.
+ * Tiap akun bisa di-expand untuk melihat sesi-sesinya; klik "Lihat" untuk
+ * membaca seluruh isi satu sesi. Percakapan otomatis terhapus setelah 60 hari.
  */
 export function ChatLogsPanel() {
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
@@ -160,6 +221,7 @@ export function ChatLogsPanel() {
   const [detail, setDetail] = useState<ChatLogMessage[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   async function load() {
     setLoading(true);
@@ -176,6 +238,10 @@ export function ChatLogsPanel() {
   useEffect(() => {
     void load();
   }, []);
+
+  function toggle(key: string) {
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   async function openSession(id: string) {
     setOpenId(id);
@@ -207,9 +273,38 @@ export function ChatLogsPanel() {
     }
   }
 
-  const filtered = channelFilter
-    ? sessions.filter((s) => (s.channel || "") === channelFilter)
-    : sessions;
+  async function removeGroup(g: UserGroup) {
+    if (
+      !window.confirm(
+        `Hapus permanen SEMUA ${g.sessions.length} percakapan milik "${g.name}"? Tindakan ini tidak bisa dibatalkan.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      for (const s of g.sessions) {
+        await deleteChatSession(s.session_id);
+      }
+      const ids = new Set(g.sessions.map((s) => s.session_id));
+      setSessions((prev) => prev.filter((s) => !ids.has(s.session_id)));
+      if (openId && ids.has(openId)) setOpenId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menghapus percakapan.");
+    }
+  }
+
+  const filtered = useMemo(
+    () =>
+      channelFilter
+        ? sessions.filter(
+            (s) =>
+              (s.channels?.includes(channelFilter) ?? false) ||
+              (s.channel || "") === channelFilter,
+          )
+        : sessions,
+    [sessions, channelFilter],
+  );
+  const groups = useMemo(() => groupByUser(filtered), [filtered]);
   const totalQuestions = filtered.reduce((n, s) => n + s.questions, 0);
 
   return (
@@ -219,9 +314,9 @@ export function ChatLogsPanel() {
           <div>
             <h2 className="text-base font-semibold text-navy dark:text-jet-100">Riwayat Pengguna</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
-              Pantau siapa saja yang memakai chatbot: nama user (bila login lewat CMS) atau
-              “Anonim”, kapan terakhir aktif, dan apa yang ditanyakan. Klik “Lihat” untuk membaca
-              seluruh percakapan. Percakapan otomatis terhapus permanen setelah 60 hari.
+              Percakapan dikelompokkan per akun (nama user bila login lewat CMS, atau
+              “Anonim”). Klik satu baris untuk melihat semua sesinya, lalu “Lihat”
+              untuk membaca isi percakapan. Percakapan otomatis terhapus permanen setelah 60 hari.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -243,6 +338,9 @@ export function ChatLogsPanel() {
 
         {!loading && !error && sessions.length > 0 && (
           <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-brand-200/70">
+            <span className={`px-3 py-1 ${CARD}`}>
+              Total pengguna: <b className="text-jet-700 dark:text-jet-100">{groups.length}</b>
+            </span>
             <span className={`px-3 py-1 ${CARD}`}>
               Total sesi: <b className="text-jet-700 dark:text-jet-100">{filtered.length}</b>
             </span>
@@ -272,115 +370,230 @@ export function ChatLogsPanel() {
                 <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400 dark:border-night-700 dark:text-brand-200/60">
                   <tr>
                     <th className="px-4 py-3 font-medium">Pengguna</th>
-                    <th className="px-4 py-3 font-medium">Pertanyaan pertama</th>
+                    <th className="px-4 py-3 font-medium">Pertanyaan terbaru</th>
                     <th className="px-4 py-3 text-center font-medium">Tanya</th>
                     <th className="px-4 py-3 font-medium">Terakhir aktif</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-night-800">
-                  {filtered.map((s) => (
-                    <tr key={s.session_id} className="hover:bg-jet-50 dark:hover:bg-night-800/50">
-                      <td className="px-4 py-3">
-                        {s.user_name || s.user_email ? (
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-jet-700 dark:text-brand-100">
-                              {s.user_name || s.user_email}
-                            </div>
-                            {s.user_name && s.user_email && (
-                              <div className="truncate text-xs text-slate-400 dark:text-brand-200/60">
-                                {s.user_email}
+                  {groups.map((g) => {
+                    const isOpen = !!expanded[g.key];
+                    const latest = g.sessions[0];
+                    return (
+                      <Fragment key={g.key}>
+                        <tr
+                          className="cursor-pointer hover:bg-jet-50 dark:hover:bg-night-800/50"
+                          onClick={() => toggle(g.key)}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-start gap-2">
+                              <span
+                                className={`mt-0.5 select-none text-xs text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                              >
+                                ▶
+                              </span>
+                              <div className="min-w-0">
+                                {g.anonymous ? (
+                                  <div className="italic text-slate-400 dark:text-brand-200/60">Anonim</div>
+                                ) : (
+                                  <>
+                                    <div className="truncate font-medium text-jet-700 dark:text-brand-100">
+                                      {g.name}
+                                    </div>
+                                    {g.email && (
+                                      <div className="truncate text-xs text-slate-400 dark:text-brand-200/60">
+                                        {g.email}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                  {g.channels.length ? (
+                                    g.channels.map((c) => <ChannelBadge key={c} channel={c} />)
+                                  ) : (
+                                    <ChannelBadge />
+                                  )}
+                                  <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:border-night-600 dark:bg-night-800 dark:text-brand-200/70">
+                                    {g.sessions.length} sesi
+                                  </span>
+                                </div>
                               </div>
-                            )}
-                            <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
-                              {shortId(s.session_id)}
                             </div>
-                            <div className="mt-1">
-                              <ChannelBadge channel={s.channel} />
+                          </td>
+                          <td className="max-w-md px-4 py-3">
+                            <span className="line-clamp-2 text-slate-500 dark:text-brand-200/70">
+                              {latest?.first_question || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-medium text-jet-700 dark:text-brand-100">
+                            {g.questions}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-brand-200/70">
+                            {fmt(g.lastAt)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggle(g.key);
+                                }}
+                                className={GHOST_BTN}
+                              >
+                                {isOpen ? "Tutup" : `Lihat ${g.sessions.length} sesi`}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void removeGroup(g);
+                                }}
+                                className={DANGER_BTN}
+                              >
+                                Hapus semua
+                              </button>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="min-w-0">
-                            <div className="italic text-slate-400 dark:text-brand-200/60">Anonim</div>
-                            <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
-                              {shortId(s.session_id)}
-                            </div>
-                            <div className="mt-1">
-                              <ChannelBadge channel={s.channel} />
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="max-w-md px-4 py-3">
-                        <span className="line-clamp-2 text-jet-700 dark:text-brand-100">
-                          {s.first_question || "-"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center text-jet-700 dark:text-brand-100">
-                        {s.questions}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-brand-200/70">
-                        {fmt(s.last_at)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void openSession(s.session_id)}
-                            className={GHOST_BTN}
-                          >
-                            Lihat
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void removeSession(s.session_id)}
-                            className={DANGER_BTN}
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </td>
+                        </tr>
+                        {isOpen &&
+                          g.sessions.map((s) => (
+                            <tr
+                              key={s.session_id}
+                              className="bg-jet-50/60 dark:bg-night-800/30"
+                            >
+                              <td className="px-4 py-2 pl-10">
+                                <div className="min-w-0">
+                                  <div className="font-mono text-[10px] text-slate-400 dark:text-brand-200/50">
+                                    {shortId(s.session_id)}
+                                  </div>
+                                  <div className="mt-1">
+                                    <ChannelBadge channel={s.channel} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="max-w-md px-4 py-2">
+                                <span className="line-clamp-2 text-jet-700 dark:text-brand-100">
+                                  {s.first_question || "-"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 text-center text-jet-700 dark:text-brand-100">
+                                {s.questions}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-2 text-slate-500 dark:text-brand-200/70">
+                                {fmt(s.last_at)}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void openSession(s.session_id)}
+                                    className={GHOST_BTN}
+                                  >
+                                    Lihat
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void removeSession(s.session_id)}
+                                    className={DANGER_BTN}
+                                  >
+                                    Hapus
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <ul className="divide-y divide-slate-100 sm:hidden dark:divide-night-800">
-              {filtered.map((s) => (
-                <li key={s.session_id} className="space-y-2 px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
-                      {s.first_question || "-"}
-                    </span>
-                    <div className="flex shrink-0 gap-2">
+              {groups.map((g) => {
+                const isOpen = !!expanded[g.key];
+                return (
+                  <li key={g.key} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
                       <button
                         type="button"
-                        onClick={() => void openSession(s.session_id)}
-                        className={GHOST_BTN}
+                        onClick={() => toggle(g.key)}
+                        className="flex min-w-0 items-start gap-2 text-left"
                       >
-                        Lihat
+                        <span
+                          className={`mt-0.5 select-none text-xs text-slate-400 ${isOpen ? "rotate-90" : ""}`}
+                        >
+                          ▶
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-jet-700 dark:text-brand-100">
+                            {g.anonymous ? "Anonim" : g.name}
+                          </span>
+                          {!g.anonymous && g.email && (
+                            <span className="block truncate text-xs text-slate-400 dark:text-brand-200/60">
+                              {g.email}
+                            </span>
+                          )}
+                          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
+                            {g.channels.length ? (
+                              g.channels.map((c) => <ChannelBadge key={c} channel={c} />)
+                            ) : (
+                              <ChannelBadge />
+                            )}
+                            <span>· {g.sessions.length} sesi</span>
+                            <span>· {g.questions} tanya</span>
+                            <span>· {fmt(g.lastAt)}</span>
+                          </span>
+                        </span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => void removeSession(s.session_id)}
+                        onClick={() => void removeGroup(g)}
                         className={DANGER_BTN}
                       >
                         Hapus
                       </button>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
-                    <span className="font-medium text-jet-600 dark:text-brand-100">
-                      {s.user_name || s.user_email || "Anonim"}
-                    </span>
-                    <ChannelBadge channel={s.channel} />
-                    <span className="font-mono">· {shortId(s.session_id)}</span>
-                    <span>· {s.questions} tanya</span>
-                    <span>· {fmt(s.last_at)}</span>
-                  </div>
-                </li>
-              ))}
+                    {isOpen && (
+                      <ul className="mt-2 space-y-2 border-l border-slate-200 pl-3 dark:border-night-700">
+                        {g.sessions.map((s) => (
+                          <li key={s.session_id} className="space-y-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="line-clamp-2 text-sm text-jet-700 dark:text-brand-100">
+                                {s.first_question || "-"}
+                              </span>
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void openSession(s.session_id)}
+                                  className={GHOST_BTN}
+                                >
+                                  Lihat
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void removeSession(s.session_id)}
+                                  className={DANGER_BTN}
+                                >
+                                  Hapus
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-brand-200/60">
+                              <ChannelBadge channel={s.channel} />
+                              <span className="font-mono">· {shortId(s.session_id)}</span>
+                              <span>· {s.questions} tanya</span>
+                              <span>· {fmt(s.last_at)}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             </>
           )}
