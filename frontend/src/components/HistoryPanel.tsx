@@ -15,8 +15,33 @@ type Tab = "chats" | "audit" | "api";
  * ter-mount (pakai hidden) supaya data yang sudah dimuat tidak hilang saat
  * berpindah tab.
  */
+const TAB_STORAGE_KEY = "cobee.admin.logs.tab";
+const TABS: Tab[] = ["chats", "audit", "api"];
+
+// Ingat sub-tab terakhir agar tidak balik ke awal setiap kali refresh.
+function loadInitialTab(): Tab {
+  if (typeof window === "undefined") return "chats";
+  try {
+    const saved = window.localStorage.getItem(TAB_STORAGE_KEY);
+    if (saved && (TABS as string[]).includes(saved)) return saved as Tab;
+  } catch {
+    // localStorage bisa diblokir (mode privasi) — abaikan saja.
+  }
+  return "chats";
+}
+
 export function HistoryPanel() {
-  const [tab, setTab] = useState<Tab>("chats");
+  const [tab, setTab] = useState<Tab>(loadInitialTab);
+
+  // Pindah sub-tab sekaligus simpan pilihannya.
+  function chooseTab(t: Tab) {
+    setTab(t);
+    try {
+      window.localStorage.setItem(TAB_STORAGE_KEY, t);
+    } catch {
+      // abaikan bila localStorage tidak tersedia.
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-jet-100 dark:bg-night-950">
@@ -24,17 +49,17 @@ export function HistoryPanel() {
         <div className="flex gap-1">
           <TabButton
             active={tab === "chats"}
-            onClick={() => setTab("chats")}
+            onClick={() => chooseTab("chats")}
             label="Percakapan Pengguna"
           />
           <TabButton
             active={tab === "audit"}
-            onClick={() => setTab("audit")}
+            onClick={() => chooseTab("audit")}
             label="Aktivitas Admin"
           />
           <TabButton
             active={tab === "api"}
-            onClick={() => setTab("api")}
+            onClick={() => chooseTab("api")}
             label="Penggunaan API"
           />
         </div>
