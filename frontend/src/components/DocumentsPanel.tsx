@@ -427,6 +427,8 @@ export function DocumentsPanel() {
 
   // filter bersih-bersih manual per grup sumber (Smart Upload)
   const [groupFilter, setGroupFilter] = useState<string>("");
+  const [domainFilter, setDomainFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
 
   // detail modal
   const [detail, setDetail] = useState<DocumentContent | null>(null);
@@ -671,14 +673,34 @@ export function DocumentsPanel() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [docs]);
 
+  // Daftar domain & kategori yang benar-benar ada di dokumen (untuk dropdown filter).
+  const domainsInDocs = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of docs) set.add((d.domain || "").trim() || UNGROUPED);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [docs]);
+
+  const categoriesInDocs = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of docs) {
+      const v = (d.category || "").trim();
+      if (v) set.add(v);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [docs]);
+
   // Level 3: kelompokkan dokumen per domain untuk ditampilkan.
   const grouped = useMemo(() => {
     const keyOf = (d: DocumentInfo) =>
       (sortBy.startsWith("created") ? d.created_at || d.uploaded_at : d.uploaded_at) || "";
     const dir = sortBy.endsWith("asc") ? 1 : -1;
-    const base = groupFilter
-      ? docs.filter((d) => (d.source_group || "").trim() === groupFilter)
-      : docs;
+    const base = docs.filter((d) => {
+      if (groupFilter && (d.source_group || "").trim() !== groupFilter) return false;
+      if (domainFilter && ((d.domain || "").trim() || UNGROUPED) !== domainFilter)
+        return false;
+      if (categoryFilter && (d.category || "").trim() !== categoryFilter) return false;
+      return true;
+    });
     const sortedDocs = [...base].sort((a, b) => {
       const av = keyOf(a);
       const bv = keyOf(b);
@@ -698,7 +720,7 @@ export function DocumentsPanel() {
       const bv = keyOf(b[1][0]);
       return av < bv ? -dir : av > bv ? dir : 0;
     });
-  }, [docs, domainOptions, sortBy, groupFilter]);
+  }, [docs, domainOptions, sortBy, groupFilter, domainFilter, categoryFilter]);
 
   return (
     <div className="h-full overflow-y-auto bg-jet-100 dark:bg-night-950">
@@ -935,6 +957,36 @@ export function DocumentsPanel() {
                   ))}
                 </select>
               )}
+              {domainsInDocs.length > 0 && (
+                <select
+                  value={domainFilter}
+                  onChange={(e) => setDomainFilter(e.target.value)}
+                  title="Filter berdasarkan domain"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-800 dark:text-brand-100"
+                >
+                  <option value="">Semua domain</option>
+                  {domainsInDocs.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {categoriesInDocs.length > 0 && (
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  title="Filter berdasarkan kategori"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-jet-700 dark:border-night-600 dark:bg-night-800 dark:text-brand-100"
+                >
+                  <option value="">Semua kategori</option>
+                  {categoriesInDocs.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -973,7 +1025,13 @@ export function DocumentsPanel() {
               {grouped.map(([groupName, groupDocs]) => (
                 <div key={groupName}>
                   <div className="mb-2 flex items-center gap-2">
-                    <Badge kind="domain">{groupName}</Badge>
+                    <Badge
+                      kind="domain"
+                      onClick={() => setDomainFilter(groupName)}
+                      title={`Filter domain: ${groupName}`}
+                    >
+                      {groupName}
+                    </Badge>
                     <span className="text-xs text-slate-400 dark:text-brand-200/60">
                       {groupDocs.length} dokumen
                     </span>
@@ -987,7 +1045,15 @@ export function DocumentsPanel() {
                               {doc.display_name}
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1.5">
-                              {doc.category && <Badge kind="category">{doc.category}</Badge>}
+                              {doc.category && (
+                                <Badge
+                                  kind="category"
+                                  onClick={() => setCategoryFilter(doc.category)}
+                                  title={`Filter kategori: ${doc.category}`}
+                                >
+                                  {doc.category}
+                                </Badge>
+                              )}
                               {doc.topics.map((t) => (
                                 <Badge key={t} kind="topic">
                                   #{t}
