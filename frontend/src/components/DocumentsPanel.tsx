@@ -660,31 +660,6 @@ export function DocumentsPanel() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [docs]);
 
-  // Hapus semua dokumen dalam satu grup sumber (bersih-bersih tanpa unggah ulang).
-  async function handleDeleteGroup() {
-    const g = groupFilter.trim();
-    if (!g) return;
-    const targets = docs.filter((d) => (d.source_group || "").trim() === g);
-    if (!targets.length) return;
-    if (
-      !(await confirm({
-        title: "Hapus grup dokumen",
-        message: `Hapus semua ${targets.length} dokumen di grup "${g}"? Tindakan ini tidak bisa dibatalkan.`,
-        confirmText: "Hapus semua",
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      for (const d of targets) await deleteDocument(d.id);
-      setNotice(`${targets.length} dokumen di grup "${g}" dihapus.`);
-      setGroupFilter("");
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menghapus grup.");
-    }
-  }
-
   // Level 3: kelompokkan dokumen per domain untuk ditampilkan.
   const grouped = useMemo(() => {
     const keyOf = (d: DocumentInfo) =>
@@ -719,8 +694,8 @@ export function DocumentsPanel() {
       <div className="mx-auto max-w-4xl px-4 py-6">
         <h2 className="text-lg font-semibold text-navy dark:text-jet-100">Dokumen</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-brand-200/70">
-          Tambah dokumen ke knowledge base. Beri kategori (untuk konvensi nama file), domain, dan
-          label topik supaya bot lebih akurat memilih sumber.
+          Tambah dokumen ke knowledge base. Kategori & domain akan diisi otomatis dari isi
+          dokumen kalau dibiarkan kosong; kamu tetap bisa mengaturnya manual.
         </p>
 
         {/* Form tambah */}
@@ -948,14 +923,6 @@ export function DocumentsPanel() {
                     </option>
                   ))}
                 </select>
-              )}
-              {groupFilter && (
-                <button
-                  onClick={handleDeleteGroup}
-                  className="text-xs text-blush transition hover:underline dark:text-blush-400"
-                >
-                  Hapus grup ini
-                </button>
               )}
               <select
                 value={sortBy}

@@ -236,11 +236,36 @@ def _unique_filename(name: str) -> str:
     return f"{stem}-{i}{suffix}"
 
 
+def _auto_classify(meta: dict, text: str) -> None:
+    """Isi otomatis kategori & domain (plus topik/ringkasan) dari isi dokumen
+    kalau admin belum mengisinya. Aman gagal: kalau model error, dilewati saja."""
+    has_category = bool((meta.get("category") or "").strip())
+    has_domain = bool((meta.get("domain") or "").strip())
+    if has_category and has_domain:
+        return
+    if not (text or "").strip():
+        return
+    try:
+        from app.classify import suggest_metadata
+
+        suggestion = suggest_metadata(text)
+    except Exception:  # noqa: BLE001
+        logger.warning("Auto-klasifikasi gagal; lanjut tanpa metadata otomatis.", exc_info=True)
+        return
+    if not has_category and suggestion.get("category"):
+        meta["category"] = suggestion["category"]
+    if not has_domain and suggestion.get("domain"):
+        meta["domain"] = suggestion["domain"]
+    if not (meta.get("topics") or []) and suggestion.get("topics"):
+        meta["topics"] = suggestion["topics"]
+    if not (meta.get("summary") or "").strip() and suggestion.get("summary"):
+        meta["summary"] = suggestion["summary"]
+
+
 def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dict:
     """Index file ke Postgres, catat di registry, kembalikan entry-nya."""
     meta = meta or {}
     src_path = Path(src_path)
-    display_name = _prefix_name(display_name, meta.get("category", ""))
     doc_id = _rel_name(src_path)
 
     text = _extract_text(src_path)
@@ -249,6 +274,13 @@ def add_file(src_path: Path, display_name: str, meta: dict | None = None) -> dic
         raise ValueError(
             f"Tidak bisa mengekstrak teks dari '{src_path.name}': {text.strip('()')}"
         )
+
+    # Auto-klasifikasi: kalau kategori/domain belum diisi admin, minta model
+    # menyarankan dari isi dokumen supaya dokumen otomatis punya badge domain &
+    # kategori yang tepat tanpa perlu klik "Sarankan (AI)" manual.
+    _auto_classify(meta, text)
+
+    display_name = _prefix_name(display_name, meta.get("category", ""))
 
     max_tokens, overlap = _chunk_params()
     n_chunks = _index_to_store(doc_id, display_name, text, meta)
