@@ -364,6 +364,21 @@ function EditModal({
   );
 }
 
+const MODE_STORAGE_KEY = "cobee.admin.docs.mode";
+const MODES: Mode[] = ["file", "text", "smart"];
+
+// Ingat mode upload terakhir (File/Teks/Smart) agar tidak balik ke awal saat refresh.
+function loadInitialMode(): Mode {
+  if (typeof window === "undefined") return "file";
+  try {
+    const saved = window.localStorage.getItem(MODE_STORAGE_KEY);
+    if (saved && (MODES as string[]).includes(saved)) return saved as Mode;
+  } catch {
+    // localStorage bisa diblokir (mode privasi) — abaikan saja.
+  }
+  return "file";
+}
+
 export function DocumentsPanel() {
   const confirm = useConfirm();
   const [docs, setDocs] = useState<DocumentInfo[]>([]);
@@ -373,7 +388,17 @@ export function DocumentsPanel() {
   const [resetting, setResetting] = useState(false);
 
   // form
-  const [mode, setMode] = useState<Mode>("file");
+  const [mode, setMode] = useState<Mode>(loadInitialMode);
+
+  // Pindah mode upload sekaligus simpan pilihannya.
+  function chooseMode(m: Mode) {
+    setMode(m);
+    try {
+      window.localStorage.setItem(MODE_STORAGE_KEY, m);
+    } catch {
+      // abaikan bila localStorage tidak tersedia.
+    }
+  }
   const [file, setFile] = useState<File | null>(null);
   const [filename, setFilename] = useState("");
   const [textContent, setTextContent] = useState("");
@@ -703,7 +728,7 @@ export function DocumentsPanel() {
           <div className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 text-sm dark:border-night-600 dark:bg-night-800/60">
             <button
               type="button"
-              onClick={() => setMode("file")}
+              onClick={() => chooseMode("file")}
               className={`rounded-md px-3 py-1.5 transition ${
                 mode === "file"
                   ? "bg-brand-600 text-white"
@@ -714,7 +739,7 @@ export function DocumentsPanel() {
             </button>
             <button
               type="button"
-              onClick={() => setMode("text")}
+              onClick={() => chooseMode("text")}
               className={`rounded-md px-3 py-1.5 transition ${
                 mode === "text"
                   ? "bg-brand-600 text-white"
@@ -725,7 +750,7 @@ export function DocumentsPanel() {
             </button>
             <button
               type="button"
-              onClick={() => setMode("smart")}
+              onClick={() => chooseMode("smart")}
               className={`rounded-md px-3 py-1.5 transition ${
                 mode === "smart"
                   ? "bg-brand-600 text-white"
