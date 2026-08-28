@@ -4,6 +4,7 @@ import App from "./App";
 import EndUserApp from "./EndUserApp";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider } from "./components/ui/Toast";
+import { ConfirmProvider } from "./components/ui/Confirm";
 import { AuthGate } from "./features/auth/AuthGate";
 import { EndUserAuthGate } from "./features/enduser/EndUserAuthGate";
 import "./index.css";
@@ -23,15 +24,17 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <ToastProvider>
-        {isAdmin ? (
-          <AuthGate>
-            <App />
-          </AuthGate>
-        ) : (
-          <EndUserAuthGate>
-            <EndUserApp />
-          </EndUserAuthGate>
-        )}
+        <ConfirmProvider>
+          {isAdmin ? (
+            <AuthGate>
+              <App />
+            </AuthGate>
+          ) : (
+            <EndUserAuthGate>
+              <EndUserApp />
+            </EndUserAuthGate>
+          )}
+        </ConfirmProvider>
       </ToastProvider>
     </ThemeProvider>
   </StrictMode>,

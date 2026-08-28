@@ -18,6 +18,7 @@ import {
   type DocumentMeta,
 } from "../lib/api";
 import { SmartUpload } from "./SmartUpload";
+import { useConfirm } from "./ui/Confirm";
 
 type Mode = "file" | "text" | "smart";
 
@@ -364,6 +365,7 @@ function EditModal({
 }
 
 export function DocumentsPanel() {
+  const confirm = useConfirm();
   const [docs, setDocs] = useState<DocumentInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -500,9 +502,12 @@ export function DocumentsPanel() {
         const predicted = predictFilename(filename.trim(), category);
         let onConflict: "overwrite" | "new" = "overwrite";
         if (docs.some((d) => d.filename === predicted)) {
-          onConflict = confirm(
-            `Nama file "${predicted}" sudah ada.\n\nOK = Timpa dokumen lama.\nBatal = Simpan sebagai dokumen baru.`,
-          )
+          onConflict = (await confirm({
+            title: "Nama file sudah ada",
+            message: `Nama file "${predicted}" sudah ada.\n\nTimpa = ganti dokumen lama.\nSimpan baru = simpan sebagai dokumen baru.`,
+            confirmText: "Timpa",
+            cancelText: "Simpan baru",
+          }))
             ? "overwrite"
             : "new";
         }
@@ -519,9 +524,25 @@ export function DocumentsPanel() {
   }
 
   async function handleResetKb() {
-    if (!confirm("Kosongkan SELURUH knowledge base? Semua dokumen & indeks akan dihapus permanen."))
+    if (
+      !(await confirm({
+        title: "Kosongkan knowledge base",
+        message:
+          "Kosongkan SELURUH knowledge base? Semua dokumen & indeks akan dihapus permanen.",
+        confirmText: "Kosongkan",
+        danger: true,
+      }))
+    )
       return;
-    if (!confirm("Yakin? Tindakan ini tidak bisa dibatalkan.")) return;
+    if (
+      !(await confirm({
+        title: "Konfirmasi sekali lagi",
+        message: "Yakin? Tindakan ini tidak bisa dibatalkan.",
+        confirmText: "Ya, kosongkan",
+        danger: true,
+      }))
+    )
+      return;
     setResetting(true);
     setError(null);
     setNotice(null);
@@ -537,7 +558,15 @@ export function DocumentsPanel() {
   }
 
   async function handleDelete(doc: DocumentInfo) {
-    if (!confirm(`Hapus "${doc.display_name}"?`)) return;
+    if (
+      !(await confirm({
+        title: "Hapus dokumen",
+        message: `Hapus "${doc.display_name}"?`,
+        confirmText: "Hapus",
+        danger: true,
+      }))
+    )
+      return;
     setError(null);
     try {
       await deleteDocument(doc.id);
@@ -613,9 +642,12 @@ export function DocumentsPanel() {
     const targets = docs.filter((d) => (d.source_group || "").trim() === g);
     if (!targets.length) return;
     if (
-      !confirm(
-        `Hapus semua ${targets.length} dokumen di grup "${g}"? Tindakan ini tidak bisa dibatalkan.`,
-      )
+      !(await confirm({
+        title: "Hapus grup dokumen",
+        message: `Hapus semua ${targets.length} dokumen di grup "${g}"? Tindakan ini tidak bisa dibatalkan.`,
+        confirmText: "Hapus semua",
+        danger: true,
+      }))
     )
       return;
     try {

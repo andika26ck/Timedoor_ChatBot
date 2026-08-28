@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useConfirm } from "./ui/Confirm";
 import {
   getSettings,
   listModels,
@@ -87,6 +88,7 @@ function ModelSelect({
 }
 
 export function SettingsPanel() {
+  const confirm = useConfirm();
   const [info, setInfo] = useState<SettingsInfo | null>(null);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(true);
@@ -215,9 +217,13 @@ export function SettingsPanel() {
   async function onResetStats() {
     if (statsBusy) return;
     if (
-      !window.confirm(
-        "Kosongkan semua statistik pertanyaan populer? Tindakan ini tidak bisa dibatalkan."
-      )
+      !(await confirm({
+        title: "Kosongkan statistik",
+        message:
+          "Kosongkan semua statistik pertanyaan populer? Tindakan ini tidak bisa dibatalkan.",
+        confirmText: "Kosongkan",
+        danger: true,
+      }))
     ) {
       return;
     }

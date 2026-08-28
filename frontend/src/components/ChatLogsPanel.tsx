@@ -6,6 +6,7 @@ import {
   type ChatLogMessage,
   type ChatSessionSummary,
 } from "../lib/api";
+import { useConfirm } from "./ui/Confirm";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -213,6 +214,7 @@ function groupByUser(sessions: ChatSessionSummary[]): UserGroup[] {
  * membaca seluruh isi satu sesi. Percakapan otomatis terhapus setelah 60 hari.
  */
 export function ChatLogsPanel() {
+  const confirm = useConfirm();
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -258,9 +260,13 @@ export function ChatLogsPanel() {
 
   async function removeSession(id: string) {
     if (
-      !window.confirm(
-        "Hapus permanen percakapan ini? Tindakan ini tidak bisa dibatalkan.",
-      )
+      !(await confirm({
+        title: "Hapus percakapan",
+        message:
+          "Hapus permanen percakapan ini? Tindakan ini tidak bisa dibatalkan.",
+        confirmText: "Hapus",
+        danger: true,
+      }))
     ) {
       return;
     }
@@ -275,9 +281,12 @@ export function ChatLogsPanel() {
 
   async function removeGroup(g: UserGroup) {
     if (
-      !window.confirm(
-        `Hapus permanen SEMUA ${g.sessions.length} percakapan milik "${g.name}"? Tindakan ini tidak bisa dibatalkan.`,
-      )
+      !(await confirm({
+        title: "Hapus semua percakapan",
+        message: `Hapus permanen SEMUA ${g.sessions.length} percakapan milik "${g.name}"? Tindakan ini tidak bisa dibatalkan.`,
+        confirmText: "Hapus semua",
+        danger: true,
+      }))
     ) {
       return;
     }

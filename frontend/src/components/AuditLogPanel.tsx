@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { deleteAuditLog, getAuditLogs, type AuditEvent } from "../lib/api";
+import { useConfirm } from "./ui/Confirm";
 
 const CARD =
   "rounded-2xl border border-slate-200 bg-white dark:border-night-700 dark:bg-night-900";
@@ -91,6 +92,7 @@ function describeDetails(ev: AuditEvent): string {
  * atas. Bisa disaring per jenis aksi.
  */
 export function AuditLogPanel() {
+  const confirm = useConfirm();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +111,15 @@ export function AuditLogPanel() {
   }
 
   async function removeEvent(id: number) {
-    if (!window.confirm("Hapus permanen entri log ini?")) return;
+    if (
+      !(await confirm({
+        title: "Hapus entri log",
+        message: "Hapus permanen entri log ini?",
+        confirmText: "Hapus",
+        danger: true,
+      }))
+    )
+      return;
     try {
       await deleteAuditLog(id);
       setEvents((prev) => prev.filter((e) => e.id !== id));

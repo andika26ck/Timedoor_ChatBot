@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useConfirm } from "./ui/Confirm";
 import {
   createTemplate,
   deleteTemplate,
@@ -12,6 +13,7 @@ function errMsg(e: unknown): string {
 }
 
 export function TemplatesPanel() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<TemplateInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export function TemplatesPanel() {
 
   async function onDelete(id: string, text: string) {
     if (busy) return;
-    if (!window.confirm(`Hapus template "${text}"?`)) return;
+    if (!(await confirm({ title: "Hapus template", message: `Hapus template "${text}"?`, confirmText: "Hapus", danger: true }))) return;
     setBusy(true);
     setError(null);
     try {

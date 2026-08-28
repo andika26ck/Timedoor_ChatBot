@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Conversation } from "../types";
+import { useConfirm } from "../../../components/ui/Confirm";
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
@@ -73,6 +74,7 @@ export function ConversationSidebar({
   onRename,
   onDelete,
 }: ConversationSidebarProps) {
+  const confirm = useConfirm();
   const sorted = useMemo(
     () => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt),
     [conversations],
@@ -134,7 +136,17 @@ export function ConversationSidebar({
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Hapus percakapan "${c.title}"?`)) onDelete(c.id);
+                        void (async () => {
+                          if (
+                            await confirm({
+                              title: "Hapus percakapan",
+                              message: `Hapus percakapan "${c.title}"?`,
+                              confirmText: "Hapus",
+                              danger: true,
+                            })
+                          )
+                            onDelete(c.id);
+                        })();
                       }}
                       className="shrink-0 rounded p-1 text-slate-400 opacity-0 transition hover:text-red-500 group-hover:opacity-100"
                       aria-label="Hapus percakapan"
