@@ -10,6 +10,13 @@
  *           data-title="Cobee"></script>
  *
  * Widget dirender di dalam Shadow DOM agar CSS-nya terisolasi dari halaman host.
+ *
+ * CATATAN IDENTITAS (PENTING):
+ * Identitas user (nama/email) TIDAK dikirim dari browser. Untuk embed di CMS /
+ * web lain, identitas di-inject SERVER-SIDE oleh proxy CMS lewat header
+ * X-User-* + X-Proxy-Secret (lihat docs/PANDUAN_INTEGRASI_CMS.md). Karena itu
+ * widget ini sengaja TIDAK lagi membaca data-user-* / window.__TD_CHATBOT_USER_*
+ * (jalur browser gampang dipalsukan dan sudah tidak dipercaya backend).
  */
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -21,9 +28,6 @@ import cssText from "./index.css?inline";
 type WidgetConfig = {
   apiUrl?: string;
   apiKey?: string;
-  userId?: string;
-  userName?: string;
-  userEmail?: string;
   title?: string;
   subtitle?: string;
   mountId?: string;
@@ -39,9 +43,6 @@ function readConfig(): WidgetConfig {
   return {
     apiUrl: d.apiUrl,
     apiKey: d.apiKey,
-    userId: d.userId,
-    userName: d.userName,
-    userEmail: d.userEmail,
     title: d.title,
     subtitle: d.subtitle,
     mountId: d.mountId ?? "td-chatbot",
@@ -55,19 +56,10 @@ function mount(config: WidgetConfig) {
     (window as unknown as Record<string, string>).__TD_CHATBOT_API_URL = config.apiUrl;
   }
   // API key runtime (opsional) — dikirim sebagai header X-API-Key oleh lib/api.ts.
+  // Untuk embed CMS JANGAN pakai ini: API key disuntik server-side oleh proxy,
+  // supaya tidak pernah muncul di HTML/browser.
   if (config.apiKey) {
     (window as unknown as Record<string, string>).__TD_CHATBOT_API_KEY = config.apiKey;
-  }
-  // Identitas user dari CMS (opsional, apa adanya) — dikirim sebagai field
-  // user_id/user_name/user_email di body /ask oleh lib/api.ts. Kosong = anonim.
-  if (config.userId) {
-    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_ID = config.userId;
-  }
-  if (config.userName) {
-    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_NAME = config.userName;
-  }
-  if (config.userEmail) {
-    (window as unknown as Record<string, string>).__TD_CHATBOT_USER_EMAIL = config.userEmail;
   }
 
   const host =
