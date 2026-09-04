@@ -396,10 +396,43 @@ def _history_payload(req: AskRequest) -> list[dict]:
 # Header identitas yang di-inject oleh proxy CMS tepercaya (server-side).
 # LEBIH DIPERCAYA daripada field body: user biasa lewat proxy tidak bisa
 # mengubahnya karena proxy yang mengisi berdasarkan sesi login CMS.
+# CARA UTAMA: JWT HS256 yang DITANDATANGANI proxy dgn IDENTITY_PROXY_SECRET
+# (anti-tamper + anti-replay via exp). Secret tak pernah dikirim mentah.
+_IDENTITY_TOKEN_HEADER = "X-Identity-Token"
+# FALLBACK migrasi (secret polos) - hapus setelah semua proxy pakai token.
 _ID_HEADER = "X-User-Id"
 _NAME_HEADER = "X-User-Name"
 _EMAIL_HEADER = "X-User-Email"
 _PROXY_SECRET_HEADER = "X-Proxy-Secret"
+
+
+def _identity_from_token(request: Request):
+    """Identitas dari X-Identity-Token (JWT HS256 ditandatangani proxy CMS).
+
+    Return (id, name, email, "proxy") bila token valid & belum kedaluwarsa,
+    atau None. Verifikasi memakai IDENTITY_PROXY_SECRET (fail-closed).
+    """
+    tok = (request.headers.get(_IDENTITY_TOKEN_HEADER) or "").strip()
+    if not tok:
+        return None
+    secret = (settings.identity_proxy_secret or "").strip()
+    if not secret:
+        logger.warning(
+            "X-Identity-Token diabaikan: IDENTITY_PROXY_SECRET belum diset di server."
+        )
+        return None
+    payload = auth.decode_token(tok, secret_str=secret)
+    if not payload:
+        logger.warning(
+            "X-Identity-Token ditolak: tanda tangan tidak cocok / token kedaluwarsa."
+        )
+        return None
+    uid = (str(payload.get("sub") or "")).strip() or None
+    name = (str(payload.get("name") or "")).strip() or None
+    email = (str(payload.get("email") or "")).strip() or None
+    if not (uid or name or email):
+        return None
+    return (uid, name, email, "proxy")
 
 
 def _identity_fields(
@@ -407,11 +440,14 @@ def _identity_fields(
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Tentukan identitas user untuk log. Return (id, name, email, source).
 
-    Prioritas:
-      1. Header `X-User-*` dari proxy CMS (source="proxy") — paling dipercaya.
-         Bila `identity_proxy_secret` diset, header ini hanya diterima kalau
-         `X-Proxy-Secret` cocok (mencegah spoof via panggilan langsung ke API).
-      2. Tidak ada → anonim (semua None).
+    Prioritas (paling dipercaya lebih dulu):
+      0. Sesi login akun terverifikasi (JWT) -> source="account".
+      1. X-Identity-Token: JWT identitas yang DITANDATANGANI proxy CMS dengan
+         IDENTITY_PROXY_SECRET (anti-tamper + anti-replay via exp) -> "proxy".
+      2. FALLBACK migrasi: header mentah X-User-* + X-Proxy-Secret, HANYA bila
+         IDENTITY_ALLOW_LEGACY_HEADERS=true dan X-Proxy-Secret cocok -> "proxy".
+      3. Tidak ada identitas -> (None, None, None, None) = anonim; lalu ditolak
+         401 oleh _require_identity (mode tanpa anonim).
          (Jalur body `user_*` / "embed" DIHAPUS demi keamanan: identitas dari
          browser gampang dipalsukan.)
     """
@@ -425,11 +461,17 @@ def _identity_fields(
         name = (acct.get("name") or "").strip() or None
         return (email, name, email, "account")
 
+    # 1. Token identitas bertanda tangan dari proxy CMS (CARA UTAMA).
+    from_token = _identity_from_token(request)
+    if from_token is not None:
+        return from_token
+
+    # 2. FALLBACK migrasi: header mentah X-User-* + X-Proxy-Secret (secret polos).
     h = request.headers
     h_id = (h.get(_ID_HEADER) or "").strip()
     h_name = (h.get(_NAME_HEADER) or "").strip()
     h_email = (h.get(_EMAIL_HEADER) or "").strip()
-    if h_id or h_name or h_email:
+    if settings.identity_allow_legacy_headers and (h_id or h_name or h_email):
         expected = (settings.identity_proxy_secret or "").strip()
         supplied = (h.get(_PROXY_SECRET_HEADER) or "").strip()
         # Fail-closed: X-User-* HANYA dipercaya bila IDENTITY_PROXY_SECRET sudah
@@ -486,7 +528,8 @@ def _channel(request: Request, source: str | None) -> str | None:
 
 
 def _log_chat(
-    req: AskRequest, question: str, answer: str, request: Request
+    req: AskRequest, question: str, answer: str, request: Request,
+    identity: tuple | None = None,
 ) -> None:
     """Catat percakapan ke log (best-effort) untuk tracking sisi admin.
 
@@ -495,7 +538,9 @@ def _log_chat(
     mengganggu jawaban ke user.
     """
     sid = (req.session_id or "").strip()
-    uid, uname, uemail, usrc = _identity_fields(request, req)
+    uid, uname, uemail, usrc = (
+        identity if identity is not None else _identity_fields(request, req)
+    )
     chan = _channel(request, usrc)
     chatlog.log_message(
         sid, "user", question, req.domain, req.topic,
@@ -581,11 +626,30 @@ def get_taxonomy():
 # ------------------------------ Chat ------------------------------
 
 
+def _require_identity(request: Request, req: AskRequest):
+    """Kebijakan TANPA ANONIM: tiap chat wajib beridentitas.
+
+    Return tuple (id, name, email, source) bila ada. Kalau semua kosong,
+    lempar 401 supaya percakapan anonim tidak pernah diproses/tercatat.
+    """
+    identity = _identity_fields(request, req)
+    if not any(identity[:3]):
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Identitas wajib: percakapan anonim tidak diizinkan. "
+                "Login akun atau akses lewat CMS terautentikasi (proxy)."
+            ),
+        )
+    return identity
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask_endpoint(req: AskRequest, request: Request):
     question = req.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
+    identity = _require_identity(request, req)
     try:
         result = ask(question, req.domain, req.topic, history=_history_payload(req))
     except Exception as exc:  # noqa: BLE001
@@ -598,7 +662,7 @@ def ask_endpoint(req: AskRequest, request: Request):
         if isinstance(result, dict)
         else getattr(result, "answer", "")
     )
-    _log_chat(req, question, answer_text or "", request)
+    _log_chat(req, question, answer_text or "", request, identity=identity)
     _audit_api_usage(request, "ask", req)
     return result
 
@@ -620,6 +684,7 @@ def ask_stream_endpoint(req: AskRequest, request: Request):
     question = req.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
+    identity = _require_identity(request, req)
 
     history = _history_payload(req)
 
@@ -642,7 +707,7 @@ def ask_stream_endpoint(req: AskRequest, request: Request):
             return
         # catat frekuensi hanya kalau seluruh stream berhasil
         stats_store.record_question(question)
-        _log_chat(req, question, "".join(answer_parts), request)
+        _log_chat(req, question, "".join(answer_parts), request, identity=identity)
         _audit_api_usage(request, "ask_stream", req)
         yield sse({"type": "done"})
 

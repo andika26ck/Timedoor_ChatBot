@@ -100,7 +100,7 @@ def popular(
 
 
 def clear() -> None:
-    """Kosongkan statistik. Belum dipakai endpoint, disiapkan untuk fitur
-    tombol reset statistik di menu Kelola DB."""
+    """Kosongkan statistik. Dipakai endpoint POST /admin/stats/reset (menu
+    Kelola DB) untuk mengosongkan daftar pertanyaan populer."""
     with _store.lock:
         _store.write([])

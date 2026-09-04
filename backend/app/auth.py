@@ -43,8 +43,9 @@ def _b64d(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
-def _sign(signing_input: bytes) -> str:
-    sig = hmac.new(_secret().encode("utf-8"), signing_input, hashlib.sha256).digest()
+def _sign(signing_input: bytes, secret_str: str | None = None) -> str:
+    key = secret_str if secret_str is not None else _secret()
+    sig = hmac.new(key.encode("utf-8"), signing_input, hashlib.sha256).digest()
     return _b64e(sig)
 
 
@@ -63,14 +64,19 @@ def create_access_token(
     return f"{h}.{p}.{_sign(signing_input)}"
 
 
-def decode_token(token: str) -> dict | None:
-    """Verifikasi tanda tangan + kedaluwarsa. Kembalikan payload atau None."""
+def decode_token(token: str, secret_str: str | None = None) -> dict | None:
+    """Verifikasi tanda tangan + kedaluwarsa. Kembalikan payload atau None.
+
+    secret_str: bila diberikan, verifikasi memakai secret ini (dipakai untuk
+    token identitas dari proxy CMS yang ditandatangani IDENTITY_PROXY_SECRET).
+    Bila None, pakai AUTH_JWT_SECRET (token login admin).
+    """
     try:
         h, p, s = token.split(".")
     except (ValueError, AttributeError):
         return None
     signing_input = f"{h}.{p}".encode("ascii")
-    if not hmac.compare_digest(_sign(signing_input), s):
+    if not hmac.compare_digest(_sign(signing_input, secret_str), s):
         return None
     try:
         payload = json.loads(_b64d(p))
