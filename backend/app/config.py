@@ -53,17 +53,9 @@ class Settings(BaseSettings):
     #     X-Identity-Token) memakai secret ini. Backend memverifikasi tanda
     #     tangan + kedaluwarsa (exp) -> identitas anti-tamper & anti-replay, dan
     #     secret TIDAK pernah dikirim mentah di kabel.
-    #   - FALLBACK migrasi: header lama X-User-* + X-Proxy-Secret masih diterima
-    #     sementara (secret polos). Hapus setelah semua proxy pakai token.
     #   - Kosong = SEMUA identitas dari proxy DITOLAK (bukan "dipercaya apa
     #     adanya"). Backend memang fail-closed demi keamanan.
     identity_proxy_secret: str = ""
-
-    # Terima header identitas LAMA (X-User-* + X-Proxy-Secret) sebagai fallback
-    # migrasi. Default True agar proxy lama tidak langsung terputus. Set False
-    # setelah semua proxy CMS pindah ke X-Identity-Token (token bertanda tangan)
-    # supaya HANYA token bertanda tangan yang diterima.
-    identity_allow_legacy_headers: bool = True
 
     @property
     def cors_origins_list(self) -> list[str]:

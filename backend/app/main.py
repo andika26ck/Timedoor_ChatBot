@@ -399,11 +399,6 @@ def _history_payload(req: AskRequest) -> list[dict]:
 # CARA UTAMA: JWT HS256 yang DITANDATANGANI proxy dgn IDENTITY_PROXY_SECRET
 # (anti-tamper + anti-replay via exp). Secret tak pernah dikirim mentah.
 _IDENTITY_TOKEN_HEADER = "X-Identity-Token"
-# FALLBACK migrasi (secret polos) - hapus setelah semua proxy pakai token.
-_ID_HEADER = "X-User-Id"
-_NAME_HEADER = "X-User-Name"
-_EMAIL_HEADER = "X-User-Email"
-_PROXY_SECRET_HEADER = "X-Proxy-Secret"
 
 
 def _identity_from_token(request: Request):
@@ -444,12 +439,10 @@ def _identity_fields(
       0. Sesi login akun terverifikasi (JWT) -> source="account".
       1. X-Identity-Token: JWT identitas yang DITANDATANGANI proxy CMS dengan
          IDENTITY_PROXY_SECRET (anti-tamper + anti-replay via exp) -> "proxy".
-      2. FALLBACK migrasi: header mentah X-User-* + X-Proxy-Secret, HANYA bila
-         IDENTITY_ALLOW_LEGACY_HEADERS=true dan X-Proxy-Secret cocok -> "proxy".
-      3. Tidak ada identitas -> (None, None, None, None) = anonim; lalu ditolak
+      2. Tidak ada identitas -> (None, None, None, None) = anonim; lalu ditolak
          401 oleh _require_identity (mode tanpa anonim).
-         (Jalur body `user_*` / "embed" DIHAPUS demi keamanan: identitas dari
-         browser gampang dipalsukan.)
+         (Jalur body `user_*` / "embed" dan header lama X-User-* DIHAPUS demi
+         keamanan: identitas dari browser/header mentah gampang dipalsukan.)
     """
     # 0. Sesi login terverifikasi (JWT) — identitas PALING tepercaya karena
     #    ditandatangani server, bukan dikirim mentah dari browser.
@@ -466,29 +459,10 @@ def _identity_fields(
     if from_token is not None:
         return from_token
 
-    # 2. FALLBACK migrasi: header mentah X-User-* + X-Proxy-Secret (secret polos).
-    h = request.headers
-    h_id = (h.get(_ID_HEADER) or "").strip()
-    h_name = (h.get(_NAME_HEADER) or "").strip()
-    h_email = (h.get(_EMAIL_HEADER) or "").strip()
-    if settings.identity_allow_legacy_headers and (h_id or h_name or h_email):
-        expected = (settings.identity_proxy_secret or "").strip()
-        supplied = (h.get(_PROXY_SECRET_HEADER) or "").strip()
-        # Fail-closed: X-User-* HANYA dipercaya bila IDENTITY_PROXY_SECRET sudah
-        # diset DI SERVER dan X-Proxy-Secret dari proxy cocok. Ini mencegah orang
-        # memalsukan identitas lewat panggilan langsung ke API (tanpa lewat proxy).
-        if expected and hmac.compare_digest(expected, supplied):
-            return (h_id or None, h_name or None, h_email or None, "proxy")
-        if not expected:
-            logger.warning(
-                "X-User-* diabaikan: IDENTITY_PROXY_SECRET belum diset di server."
-            )
-        else:
-            logger.warning("X-User-* diabaikan: X-Proxy-Secret tidak cocok.")
-
-    # Jalur identitas via body (embed) DIHAPUS demi keamanan — identitas dari
-    # browser gampang dipalsukan. Identitas hanya dari login akun (JWT, di atas)
-    # atau proxy CMS tepercaya (X-User-* + X-Proxy-Secret).
+    # Tidak ada identitas tepercaya. Jalur header lama X-User-* + X-Proxy-Secret
+    # dan jalur body (embed) DIHAPUS demi keamanan — identitas dari browser/header
+    # mentah gampang dipalsukan. Identitas hanya dari login akun (JWT, di atas)
+    # atau X-Identity-Token bertanda tangan dari proxy CMS.
     return (None, None, None, None)
 
 
@@ -533,7 +507,7 @@ def _log_chat(
 ) -> None:
     """Catat percakapan ke log (best-effort) untuk tracking sisi admin.
 
-    Identitas diambil dari login akun (JWT) atau header proxy (`X-User-*`);
+    Identitas diambil dari login akun (JWT) atau token proxy (`X-Identity-Token`);
     kosong = anonim (hanya session_id). Kegagalan pencatatan tidak boleh
     mengganggu jawaban ke user.
     """
